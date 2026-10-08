@@ -2,7 +2,7 @@
 
 A static study site for the CIS*3090 Parallel Programming Midterm 1 (Tuesday, October 20, 2026). It has no build step and no dependencies.
 
-- **Read** (`read.html`) — all eight topics from Lectures 1–8 and textbook Ch. 1, 2 and 4, plus a cheat sheet.
+- **Read** (`read.html`) — all eight topics from Lectures 1–8 and textbook Ch. 1, 2 and 4, plus a cheat sheet and ten interactive demos (concurrency, work splitting, reductions, create/join, odd-even sort, race conditions, Amdahl's law, caches, pipelining, heat diffusion).
 - **Flashcards** (`flashcards.html`) — 101 cards by topic. Marks which ones you know.
 - **Quizzes** (`quiz.html`) — 84 multiple-choice questions by topic, with an explanation after each answer.
 - **Practice exam** (`exam.html`) — a timed 60-minute, 50-question exam. Exam A is 50 questions not used in the quizzes; Exam B draws 50 from the quiz bank. Includes code-reading and graph-reading questions, a topic breakdown and a full review.

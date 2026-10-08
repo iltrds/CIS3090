@@ -14,7 +14,7 @@
   <main>
     <div class="page-head">
       <h1>Read</h1>
-      <p>Everything on the midterm, in lecture order. Each section names the lectures and textbook sections it comes from.</p>
+      <p>Everything on the midterm, in lecture order. Each section names the lectures and textbook sections it comes from, and the blue-edged boxes are demos you can step through.</p>
     </div>
 
     <div class="reading">
@@ -50,6 +50,7 @@
 </tbody></table></div>
 <p>Parallel and distributed programs are also concurrent. The OS handles concurrency (scheduling 400 threads on 16 cores); it does <strong>not</strong> parallelize a compiled serial binary. Auto-parallelization tools like OpenMP only work in narrow cases.</p>
 
+<div class="demo" data-demo="concurrency"></div>
 <h3>Why hardware went multicore</h3>
 <ul>
 <li>CPU performance grew about 50% per year from 1986 to 2002, then about 20% per year. Ten years at 50% is 1.5¹⁰ ≈ 58× (the lecture's "60×"); at 20% it's 1.2¹⁰ ≈ 6×. The textbook quotes under 4% per year for 2015–2017.</li>
@@ -93,6 +94,7 @@ int my_first = rank * q + (rank &lt; r ? rank : r);   /* my_last = my_first + my
 <li>The alternative (⌈n/p⌉ to the first p−1 workers, the rest to the last) can leave the last worker far less: 217 exams over 6 TAs gives 37×5 + 32. Both finish in 37 "steps" if you must wait for everyone; the even split wins when finished workers can move on.</li>
 </ul>
 
+<div class="demo" data-demo="split"></div>
 <h3>Reductions</h3>
 <p>A <strong>reduction</strong> repeatedly applies a binary operator (+, ×, max) to a sequence to get one value, kept in a reduction variable.</p>
 <div class="table-wrap"><table>
@@ -102,6 +104,7 @@ int my_first = rank * q + (rank &lt; r ? rank : r);   /* my_last = my_first + my
 <tr><td>Tree: pairs, then pairs of pairs</td><td>O(log p): ⌈log₂ p⌉</td><td>3</td><td>10</td></tr>
 </tbody></table></div>
 <p>Both do p − 1 additions in total; the tree overlaps them. Pattern for 8 cores: round 1, 0←1, 2←3, 4←5, 6←7; round 2, 0←2, 4←6; round 3, 0←4. Partner = rank XOR 2ᵏ (textbook Exercise 1.4).</p>
+<div class="demo" data-demo="reduction"></div>
 <p>Total parallel-sum time is <strong>O(n/p) + O(log p)</strong>. The log p term only matters when each core's work is tiny (n barely bigger than p). This analysis <strong>assumes communication is nearly free</strong>; if sending costs more than adding, the tree can be no faster, or even slower. Always check your cost assumptions, like comparisons vs swaps in sorting.</p>
 
 <h3>Data vs task parallelism</h3>
@@ -219,6 +222,7 @@ pthread_attr_destroy(&amp;attr);</code></pre>
 <li>Static threads (start all, run to completion) are what we use. Dynamic threads fork a worker per request.</li>
 </ul>
 
+<div class="demo" data-demo="join"></div>
 <h3>Lecture 3 timings</h3>
 <ul>
 <li>Parallel sum, 160 million elements: 1 thread ≈ 1.5 s, 2 ≈ 0.85 s, 4 ≈ 0.7 s. Small gain because summing is cheap and memory-bound.</li>
@@ -277,6 +281,7 @@ pthread_barrier_destroy(&amp;barrier);</code></pre>
 <li>Barrier 2, after all reads and before any writes: nobody overwrites their block while a slower partner is still reading it.</li>
 <li>Drop either one and you get a race: merging half-old, half-new data.</li>
 </ul>
+<div class="demo" data-demo="oddeven"></div>
 <p>Lecture trace (p = 4, n = 16) after the local sorts: t0 15 27 33 36 | t1 35 36 42 43 | t2 12 21 27 49 | t3 6 9 18 40. After 4 phases: 6 9 12 15 | 18 21 27 27 | 33 35 36 36 | 40 42 43 49.</p>
 <div class="callout">
 <p><strong>The prof's review questions.</strong> Time the local sort (it's part of the algorithm) but not the random initialization. Phases scale with p, each merging O(n/p) data, instead of one O(n) serial merge on one thread. The remaining serial part is mostly barrier waiting and threads idling in odd phases.</p>
@@ -296,6 +301,7 @@ inc   r         /* T1 has 6            T2 has 6             */
 store r, &amp;x     /* T1 stores 6         T2 stores 6 → one increment lost */</code></pre>
 <p>counter1.c: two threads × 1,000,000 increments rarely gives 2,000,000. An <strong>atomic</strong> operation cannot be interrupted by a context switch. A <strong>critical section</strong> is code where a race can occur; <strong>mutual exclusion</strong> means only one thread is inside at a time. Critical sections run serially, so keep them few and short.</p>
 
+<div class="demo" data-demo="race"></div>
 <h3>Choosing a tool</h3>
 <div class="table-wrap"><table>
 <thead><tr><th>Tool</th><th>Use for</th><th>Waiting threads</th><th>Key calls</th><th>Watch out</th></tr></thead>
@@ -409,6 +415,7 @@ pthread_mutex_unlock(&amp;m);</code></pre>
 <li>Why not to despair: the serial fraction often shrinks as the problem grows (<strong>Gustafson's law</strong>), many real programs get huge speedups, and 5–10× may be plenty.</li>
 </ul>
 
+<div class="demo" data-demo="amdahl"></div>
 <h3>Scalability</h3>
 <p>A program is <strong>scalable</strong> if, as p grows, you can grow the problem size at some rate that keeps E constant.</p>
 <ul>
@@ -469,6 +476,7 @@ pthread_mutex_unlock(&amp;m);</code></pre>
 <li>Mappings (16-line memory, 4-line cache): fully associative = any slot; direct-mapped = slot is line mod 4; n-way set associative = one of n slots in a set. Eviction is usually least recently used.</li>
 <li><strong>Row-major order</strong>: C stores A[i][j] row after row. With i outer and j inner you walk memory contiguously. Textbook: MAX = 4, lines of 4 doubles, a 2-line direct-mapped cache: row order 4 misses, column order 16 (every access). With MAX = 1000 row order ran about 3× faster.</li>
 </ul>
+<div class="demo" data-demo="cache"></div>
 <p>The lecture's rules for cache-friendly data: structs instead of objects, no pointers inside structs, contiguous arrays instead of linked lists, 2D arrays as 1D arrays with index math (<code>a[i*N + j]</code>), and complex objects as several flat 1D buffers (vertex, index and texture buffers in a 3D model). Contiguous data is easy to cache <em>and</em> easy to transfer, which matters for MPI and GPUs.</p>
 
 <h3>Virtual memory (Ch. 2.2.4)</h3>
@@ -490,6 +498,7 @@ pthread_mutex_unlock(&amp;m);</code></pre>
 <li>ILP fails on dependency chains like <code>f[i] = f[i-1] + f[i-2]</code> (Fibonacci).</li>
 </ul>
 
+<div class="demo" data-demo="pipeline"></div>
 <h3>Threads and hyper-threading</h3>
 <ul>
 <li><strong>Thread-level parallelism</strong> (our threads) is <strong>coarser-grained</strong> than ILP: whole chunks of code instead of single instructions.</li>
@@ -552,6 +561,7 @@ pthread_mutex_unlock(&amp;m);</code></pre>
     if (converged) break;
 }</code></pre>
 <p><strong>Why no mutexes</strong>: writes are disjoint (each thread writes only its own rows of <code>next</code> and its own <code>thread_max_diff[tid]</code>), and barriers separate the parallel phase from thread 0's serial phase. A single-threaded section must be <strong>closed on both sides</strong>: barrier 1 so thread 0 reads finished data, barrier 2 so everyone else reads thread 0's results.</p>
+<div class="demo" data-demo="heat"></div>
 <p>Without barrier 2, fast threads start the next iteration before the swap and the converged flag are visible, so they read the wrong grid or miss termination. A misplaced barrier shows up as visible <strong>seams at band boundaries</strong> in the rendered frames.</p>
 <p>The prof's correctness test: run with 1, 4 and 7 threads and diff the frames; they must be identical. This case study returns in the MPI unit, where reading a neighbour's row becomes a <strong>halo exchange</strong> of messages.</p>
 </section>
@@ -604,6 +614,7 @@ pthread_mutex_unlock(&amp;m);</code></pre>
     </div>
   </main>
   <script src="assets/common.js"></script>
+  <script src="assets/demos.js"></script>
   <script>
     (function () {
       const links = Array.from(document.querySelectorAll('.toc a'));
