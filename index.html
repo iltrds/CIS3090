@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CIS*3090 Midterm 1 Study</title>
+  <meta name="description" content="Reading, flashcards, topic quizzes and a timed practice exam for CIS*3090 Parallel Programming Midterm 1.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect y='1' width='16' height='2.5' rx='1' fill='%232546c9'/%3E%3Crect y='5' width='11' height='2.5' rx='1' fill='%230e8570'/%3E%3Crect y='9' width='14' height='2.5' rx='1' fill='%23a8378a'/%3E%3Crect y='13' width='8' height='2.5' rx='1' fill='%23b98200'/%3E%3C/svg%3E">
+</head>
+<body data-page="home">
+  <header id="site-header"></header>
+  <main>
+    <section class="hero">
+      <div>
+        <h1>Midterm 1 is Tuesday, October 20</h1>
+        <p class="when">In class, 60 minutes, about 50 multiple-choice questions. Covers Lectures 1–8 and textbook chapters 1, 2 and 4.</p>
+        <p class="countdown" id="countdown"></p>
+        <div class="btn-row">
+          <a class="btn" href="exam.html">Take the practice exam</a>
+          <a class="btn secondary" href="read.html">Start reading</a>
+        </div>
+      </div>
+      <figure class="lanes" aria-label="Four threads progress at different speeds and all stop at a barrier">
+        <div class="lane-box">
+          <span class="barrier-label" aria-hidden="true">pthread_barrier_wait</span>
+          <div class="lane"><span class="lane-name">thread 0</span><div class="lane-track"><div class="lane-bar"></div></div></div>
+          <div class="lane"><span class="lane-name">thread 1</span><div class="lane-track"><div class="lane-bar"></div></div></div>
+          <div class="lane"><span class="lane-name">thread 2</span><div class="lane-track"><div class="lane-bar"></div></div></div>
+          <div class="lane"><span class="lane-name">thread 3</span><div class="lane-track"><div class="lane-bar"></div></div></div>
+          <div class="barrier-line" aria-hidden="true"></div>
+        </div>
+        <figcaption class="lanes-caption">Threads run at their own pace. A barrier holds every thread until the last one arrives.</figcaption>
+      </figure>
+    </section>
+
+    <div class="home-grid">
+      <section aria-labelledby="study-h">
+        <h2 id="study-h" style="margin-top:0">Study</h2>
+        <ul class="study-list">
+          <li><a href="read.html"><span class="name">Read</span><span class="desc">All eight topics from the lectures and textbook, with code, formulas and a cheat sheet.</span><span class="stat" id="stat-read">8 topics</span></a></li>
+          <li><a href="flashcards.html"><span class="name">Flashcards</span><span class="desc">Definitions, API calls and rules for the fill-in-the-blank questions.</span><span class="stat" id="stat-cards"></span></a></li>
+          <li><a href="quiz.html"><span class="name">Topic quizzes</span><span class="desc">Multiple choice by topic, with an explanation after every answer.</span><span class="stat" id="stat-quiz"></span></a></li>
+          <li><a href="exam.html"><span class="name">Practice exam</span><span class="desc">50 questions in 60 minutes, including code and graph questions, scored by topic.</span><span class="stat" id="stat-exam"></span></a></li>
+        </ul>
+      </section>
+
+      <aside aria-labelledby="facts-h">
+        <h2 id="facts-h" style="margin-top:0">About the exam</h2>
+        <dl class="facts">
+          <dt>Format</dt>
+          <dd>All multiple choice, roughly 50 questions in 60 minutes. That's about 72 seconds per question.</dd>
+          <dt>Question styles</dt>
+          <dd>Fill in the blank, a block of code with questions about it, and a graph with questions about it.</dd>
+          <dt>Lectures</dt>
+          <dd>1 Why parallel computing, 2 Designing parallel programs, 3 Pthreads, 4 POSIX, 5 Thread synchronization, 6 Performance, 7 Hardware, 8 Heat diffusion case study.</dd>
+          <dt>Textbook</dt>
+          <dd>Pacheco and Malensek, 2nd ed.: Ch. 1; Ch. 2 sections 2.1–2.2 and 2.6–2.9; Ch. 4. Check Moodle for the exact Chapter 2 list.</dd>
+          <dt>Worth</dt>
+          <dd>23% of the final grade.</dd>
+        </dl>
+      </aside>
+    </div>
+  </main>
+
+  <script src="assets/common.js"></script>
+  <script src="data/flashcards.js"></script>
+  <script src="data/bank.js"></script>
+  <script>
+    (function () {
+      const S = window.Study;
+      const d = S.daysUntilExam();
+      const cd = document.getElementById('countdown');
+      if (d > 1) cd.innerHTML = '<strong>' + d + '</strong> days to go.';
+      else if (d === 1) cd.innerHTML = '<strong>Tomorrow.</strong> Review the cheat sheet and sleep.';
+      else if (d === 0) cd.innerHTML = '<strong>Today.</strong> Good luck.';
+      else cd.textContent = 'The exam date has passed.';
+
+      const known = S.store.get('cardsKnown', []);
+      document.getElementById('stat-cards').textContent = known.length + ' of ' + window.FLASHCARDS.length + ' known';
+
+      const best = S.store.get('quizBest', {});
+      const done = S.TOPIC_ORDER.filter(t => best[t]).length;
+      document.getElementById('stat-quiz').textContent = done + ' of 8 topics tried';
+
+      const attempts = S.store.get('examAttempts', []);
+      document.getElementById('stat-exam').textContent = attempts.length
+        ? 'Best ' + Math.max.apply(null, attempts.map(a => Math.round(100 * a.score / a.total))) + '%'
+        : 'Not taken yet';
+    })();
+  </script>
+</body>
+</html>

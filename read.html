@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Read — CIS*3090 Midterm 1 Study</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-page="read">
+  <header id="site-header"></header>
+  <main>
+    <div class="page-head">
+      <h1>Read</h1>
+      <p>Everything on the midterm, in lecture order. Each section names the lectures and textbook sections it comes from.</p>
+    </div>
+
+    <div class="reading">
+      <nav class="toc" aria-label="Sections">
+        <ol>
+          <li><a href="#why">1. Why parallel computing</a></li>
+          <li><a href="#design">2. Designing parallel programs</a></li>
+          <li><a href="#pthreads">3. Pthreads basics</a></li>
+          <li><a href="#oddeven">4. Barriers and odd-even sort</a></li>
+          <li><a href="#sync">5. Thread synchronization</a></li>
+          <li><a href="#perf">6. Performance analysis</a></li>
+          <li><a href="#hw">7. Hardware and caches</a></li>
+          <li><a href="#heat">8. Heat diffusion</a></li>
+          <li><a href="#cheat">Cheat sheet</a></li>
+        </ol>
+      </nav>
+
+      <article class="article">
+
+<!-- ================= 1 ================= -->
+<section id="why">
+<h2>1. Why parallel computing</h2>
+<p class="source">Lecture 1, textbook Ch. 1</p>
+<p class="lead">Single-core speed stopped growing fast, so performance now comes from more cores, and serial programs don't use extra cores automatically.</p>
+
+<h3>Concurrent, parallel, distributed</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Term</th><th>Meaning</th><th>Needs multiple cores?</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td>Concurrent</td><td>Multiple tasks <em>in progress</em> at once; time-slicing is enough</td><td>No</td><td>GUI with input, UI and worker threads; any modern OS</td></tr>
+<tr><td>Parallel</td><td>Tasks cooperate closely and <em>execute simultaneously</em> to solve one problem</td><td>Yes</td><td>pigz, FFmpeg, parallel sum</td></tr>
+<tr><td>Distributed</td><td>Program cooperates with other programs, often over the Internet; loosely coupled</td><td>Yes (separate machines)</td><td>Web apps with a database backend, email, multiplayer games</td></tr>
+</tbody></table></div>
+<p>Parallel and distributed programs are also concurrent. The OS handles concurrency (scheduling 400 threads on 16 cores); it does <strong>not</strong> parallelize a compiled serial binary. Auto-parallelization tools like OpenMP only work in narrow cases.</p>
+
+<h3>Why hardware went multicore</h3>
+<ul>
+<li>CPU performance grew about 50% per year from 1986 to 2002, then about 20% per year. Ten years at 50% is 1.5¹⁰ ≈ 58× (the lecture's "60×"); at 20% it's 1.2¹⁰ ≈ 6×. The textbook quotes under 4% per year for 2015–2017.</li>
+<li>Smaller transistors are faster, but faster means more power, and power becomes heat. Air-cooled chips hit their heat limit. Quantum effects and switching delays also cap clock speed.</li>
+<li>The fix: put more complete cores on one chip instead of making one core faster.</li>
+<li><strong>Moore's law</strong> (Gordon Moore, 1965): transistor count doubles about every two years (originally every year). An observation, not a physical law. More transistors means more cores.</li>
+<li>A GPU has many small, simple cores tuned for vector and small-matrix math (1,024–4,096 is typical). <strong>GPGPU</strong> is using them for general computation.</li>
+</ul>
+
+<h3>Why we write parallel programs</h3>
+<p>Running several copies of a serial program (one per folder of images) is easy parallelism, but usually we want <em>one</em> program to finish faster. Translation programs can recognize simple constructs like a sum loop and swap in a pre-written parallel version, but the best parallel algorithm is often completely different from the serial one, like the tree-structured global sum.</p>
+
+<h3>Task vs data parallelism</h3>
+<ul>
+<li><strong>Data parallelism</strong>: split the data; everyone does the same thing on their share. Each TA grades a pile of whole exams. Usually easier, so start here.</li>
+<li><strong>Task parallelism</strong>: split the operations; each worker does something different. Each TA grades one question on every exam.</li>
+<li>In the global sum, computing partial sums is data-parallel; the master receiving and adding while others send is task-parallel.</li>
+</ul>
+<p>Coordinating cores needs <strong>communication</strong> (sending data), <strong>load balancing</strong> (equal work so nobody idles) and <strong>synchronization</strong> (cores run at their own pace, so some must wait, e.g. until the master has read the input).</p>
+
+<h3>Real examples from lecture</h3>
+<ul>
+<li>Pthreads: pigz, pbzip2, FFmpeg. MPI: LAMMPS, GROMACS, OpenFOAM. GPGPU (Warp): AI, simulation, image processing.</li>
+<li>pigz on a 10-core M1 Max, 1 GB file: 34.7 s serial vs 4.7 s on 10 cores, a speedup of about 7.4. The parallel run's <em>user</em> time (39 s) is higher than serial: total CPU work went up from overhead while wall time went down.</li>
+</ul>
+</section>
+
+<!-- ================= 2 ================= -->
+<section id="design">
+<h2>2. Designing parallel programs</h2>
+<p class="source">Lecture 2, textbook Ch. 1.3–1.4 and 2.7–2.9</p>
+<p class="lead">The whole course reuses one pattern: split n items evenly over p workers, compute in parallel, then combine the results with a reduction.</p>
+
+<h3>Dividing n items among p workers</h3>
+<p>The lecture's split, used in every code example: everyone gets ⌊n/p⌋ and the first n mod p workers get one extra.</p>
+<pre><code>int q = n / p, r = n % p;
+int my_count = q + (rank &lt; r ? 1 : 0);
+int my_first = rank * q + (rank &lt; r ? rank : r);   /* my_last = my_first + my_count (exclusive) */</code></pre>
+<ul>
+<li>Largest share ⌈n/p⌉, smallest ⌊n/p⌋, difference at most 1. Shares always sum to n.</li>
+<li>The alternative (⌈n/p⌉ to the first p−1 workers, the rest to the last) can leave the last worker far less: 217 exams over 6 TAs gives 37×5 + 32. Both finish in 37 "steps" if you must wait for everyone; the even split wins when finished workers can move on.</li>
+</ul>
+
+<h3>Reductions</h3>
+<p>A <strong>reduction</strong> repeatedly applies a binary operator (+, ×, max) to a sequence to get one value, kept in a reduction variable.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Combine method</th><th>Steps on core 0</th><th>8 cores</th><th>1000 cores</th></tr></thead>
+<tbody>
+<tr><td>Serial: core 0 receives and adds p − 1 values</td><td>O(p): p − 1</td><td>7</td><td>999</td></tr>
+<tr><td>Tree: pairs, then pairs of pairs</td><td>O(log p): ⌈log₂ p⌉</td><td>3</td><td>10</td></tr>
+</tbody></table></div>
+<p>Both do p − 1 additions in total; the tree overlaps them. Pattern for 8 cores: round 1, 0←1, 2←3, 4←5, 6←7; round 2, 0←2, 4←6; round 3, 0←4. Partner = rank XOR 2ᵏ (textbook Exercise 1.4).</p>
+<p>Total parallel-sum time is <strong>O(n/p) + O(log p)</strong>. The log p term only matters when each core's work is tiny (n barely bigger than p). This analysis <strong>assumes communication is nearly free</strong>; if sending costs more than adding, the tree can be no faster, or even slower. Always check your cost assumptions, like comparisons vs swaps in sorting.</p>
+
+<h3>Data vs task parallelism</h3>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Data parallelism</th><th>Task parallelism</th></tr></thead>
+<tbody>
+<tr><td>What is split</td><td>Input data into chunks</td><td>Operations into tasks</td></tr>
+<tr><td>Each worker does</td><td>Same operation, different data</td><td>Different operations</td></tr>
+<tr><td>TA example</td><td>Each TA grades a subset of exams</td><td>Each TA grades one page of every exam</td></tr>
+<tr><td>Ease</td><td>Easier; usual first choice</td><td>Harder; needs coordination</td></tr>
+<tr><td>Communication</td><td>Often minimal</td><td>Usually higher</td></tr>
+</tbody></table></div>
+<p><strong>Embarrassingly parallel</strong>: subtasks need little or no communication (filters on a folder of photos). <strong>Hard to parallelize</strong>: recurrences like <code>A[i] = F(A[i-1])</code>, because you can't get A[k] without computing everything before it.</p>
+
+<h3>Definitions</h3>
+<ul>
+<li><strong>Communication</strong>: one core sends data to another.</li>
+<li><strong>Load balancing</strong>: keeping as many cores busy as possible.</li>
+<li><strong>Synchronization</strong>: controlling when cores start a task or access data. Cores are <em>not</em> automatically in step.</li>
+<li><strong>Shared memory</strong>: every core reads and writes one memory over a bus (Pthreads, OpenMP). <strong>Distributed memory</strong>: each core has private memory and sends messages over a network (MPI).</li>
+</ul>
+
+<h3>Foster's methodology</h3>
+<ol>
+<li><strong>Partitioning</strong>: divide computation and data into the smallest tasks; identify what can run in parallel and what is inherently serial.</li>
+<li><strong>Communication</strong>: what data must move between those tasks? Start from what each task needs to know.</li>
+<li><strong>Agglomeration</strong> (aggregation): combine fine tasks into bigger ones (if A must precede B, merge them) to cut the task count and communication.</li>
+<li><strong>Mapping</strong>: assign the composite tasks to threads or processes so work is balanced and communication is minimal.</li>
+</ol>
+<div class="table-wrap"><table>
+<thead><tr><th>Problem</th><th>Partition</th><th>Communication</th><th>Agglomeration</th><th>Mapping</th></tr></thead>
+<tbody>
+<tr><td>Sum (L2)</td><td>compute() calls and partial adds; final combine is serial-ish</td><td>Shared: start/end indices. Distributed: send chunks, then partial sums</td><td>Nothing; just do the reduce after the sums</td><td>Start/end index per thread</td></tr>
+<tr><td>Naive sort (L3)</td><td>One qsort() per section; serial merge</td><td>Data already shared; merge needs section bounds</td><td>Nothing (one task per thread)</td><td>Offset + length per thread</td></tr>
+<tr><td>Odd-even sort (L3)</td><td>One compare-swap per pair</td><td>Read partner's value each phase</td><td>Block of n/p elements per thread; compare-swap becomes compare-split</td><td>Contiguous blocks; partner by rank and phase parity</td></tr>
+<tr><td>Histogram (Ch. 2.7)</td><td>Find bin for data[i]; increment bin_counts[b]</td><td>find → increment</td><td>Merge both per element; MIMD adds private loc_bin_counts</td><td>Contiguous data blocks; tree-sum the local arrays</td></tr>
+<tr><td>Heat (L8)</td><td>One cell update</td><td>Four neighbours' old values</td><td>Band of rows per thread</td><td>⌊rows/p⌋ + remainder, contiguous</td></tr>
+</tbody></table></div>
+<p>Histogram detail: a shared <code>bin_counts[b]++</code> is a race. On MIMD systems each thread keeps a private <code>loc_bin_counts</code>, then a (tree) global sum adds the arrays. On a GPU, thousands of private copies won't fit, so it uses fast atomic increments on one shared array.</p>
+<p><strong>Ch. 2.8–2.9 assumptions</strong>: SPMD programs (one executable that branches on rank), homogeneous MIMD, at most one thread per core, static threads (started near the beginning, joined near the end). Compile with <code>gcc -g -Wall -o prog prog.c</code>; add <code>-O2</code> when timing.</p>
+</section>
+
+<!-- ================= 3 ================= -->
+<section id="pthreads">
+<h2>3. Pthreads basics</h2>
+<p class="source">Lectures 3 and 4, textbook Ch. 4.1–4.3</p>
+<p class="lead">A Pthreads program is an ordinary C program that starts threads with <code>pthread_create</code> and waits for them with <code>pthread_join</code>. Globals are shared; locals are private.</p>
+
+<h3>Threads vs processes</h3>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Threads</th><th>Processes</th></tr></thead>
+<tbody>
+<tr><td>Memory</td><td>Share data, code, heap and file descriptors; own stack and program counter</td><td>Separate address spaces</td></tr>
+<tr><td>Cost</td><td>Cheap to create and switch</td><td>More memory; slower to spawn and switch</td></tr>
+<tr><td>Communication</td><td>Shared variables (fast)</td><td>Pipes, signals, explicit shared memory</td></tr>
+<tr><td>Failure</td><td>One thread's crash kills the whole process</td><td>Isolated from each other</td></tr>
+<tr><td>Correctness</td><td>Shared data is a major source of bugs</td><td>Forces cleaner habits; privilege separation</td></tr>
+</tbody></table></div>
+<p>Process primitive → thread primitive: fork → <code>pthread_create</code>, exit → <code>pthread_exit</code>, waitpid → <code>pthread_join</code>, atexit → <code>pthread_cleanup_push</code>, getpid → <code>pthread_self</code>, abort → <code>pthread_cancel</code>.</p>
+
+<h3>The API you must be able to read</h3>
+<pre><code>#include &lt;pthread.h&gt;      /* compile: gcc -O2 -std=c99 -pthread prog.c  (or -lpthread) */
+
+void* worker(void* arg);  /* REQUIRED signature: one void* in, one void* out */
+
+int pthread_create(pthread_t* tid,             /* out: opaque handle          */
+                   const pthread_attr_t* attr,  /* NULL = default attributes   */
+                   void* (*fn)(void*),          /* the thread function         */
+                   void* arg);                  /* passed to fn; returns 0 = OK */
+int pthread_join(pthread_t tid, void** retval); /* blocks until tid ends       */</code></pre>
+<p>The textbook's hello-world (Program 4.1), condensed:</p>
+<pre><code>int thread_count;                          /* global = shared */
+
+void* Hello(void* rank) {
+    long my_rank = (long) rank;            /* local = private: each thread has its own stack */
+    printf("Hello from thread %ld of %d\n", my_rank, thread_count);
+    return NULL;
+}
+
+int main(int argc, char* argv[]) {
+    thread_count = strtol(argv[1], NULL, 10);
+    pthread_t* handles = malloc(thread_count * sizeof(pthread_t));
+    for (long t = 0; t &lt; thread_count; t++)
+        pthread_create(&amp;handles[t], NULL, Hello, (void*) t);  /* long, not int, on 64-bit */
+    printf("Hello from the main thread\n");
+    for (long t = 0; t &lt; thread_count; t++)
+        pthread_join(handles[t], NULL);
+    free(handles);
+    return 0;
+}</code></pre>
+<p><strong>Passing several values</strong>: allocate one struct per thread (rank, start, count, pointers) and pass its address. <strong>Never</strong> pass <code>&amp;t</code> of the loop variable: every thread reads the same, changing variable.</p>
+<pre><code>typedef struct { int start, count; const double* a; double partial; } Args;
+
+void* Sum(void* p) {
+    Args* arg = p;
+    double s = 0;                                   /* private accumulator */
+    for (int i = arg-&gt;start; i &lt; arg-&gt;start + arg-&gt;count; i++) s += arg-&gt;a[i];
+    arg-&gt;partial = s;                               /* own slot: no lock needed */
+    return NULL;
+}</code></pre>
+
+<h3>Behaviour you must know</h3>
+<ul>
+<li>The order in which threads run and print is <strong>nondeterministic</strong>. The OS, not you, places threads on cores.</li>
+<li><strong>Returning from main ends the process</strong> and kills every thread (the lecture's sleep(1) vs sleep(4) demo).</li>
+<li>Threads are <strong>joinable</strong> by default. A joinable thread that is never joined <strong>leaks</strong> memory.</li>
+<li><strong>Detached</strong> threads clean up after themselves and cannot be joined. Use them when nobody needs the result:</li>
+</ul>
+<pre><code>pthread_attr_t attr;
+pthread_attr_init(&amp;attr);
+pthread_attr_setdetachstate(&amp;attr, PTHREAD_CREATE_DETACHED);
+pthread_create(&amp;tid, &amp;attr, fn, NULL);
+pthread_attr_destroy(&amp;attr);</code></pre>
+<ul>
+<li>Static threads (start all, run to completion) are what we use. Dynamic threads fork a worker per request.</li>
+</ul>
+
+<h3>Lecture 3 timings</h3>
+<ul>
+<li>Parallel sum, 160 million elements: 1 thread ≈ 1.5 s, 2 ≈ 0.85 s, 4 ≈ 0.7 s. Small gain because summing is cheap and memory-bound.</li>
+<li>Naive parallel sort (qsort per section, then a serial merge on main): 1 thread ≈ 27 s, 4 threads ≈ 9 s. The serial merge is the bottleneck.</li>
+<li>Don't time the random initialization, and fix the seed so runs are comparable.</li>
+</ul>
+
+<h3>POSIX feature-test macro (Lecture 4)</h3>
+<p>POSIX is IEEE's Portable Operating System Interface. macOS and AIX are certified; Linux and Android are "mostly compliant". To compile standard C against POSIX.1-2008 in the Docker Linux image (needed for functions like <code>kill()</code>):</p>
+<pre><code>#define _POSIX_C_SOURCE 200809L   /* first line of the file */</code></pre>
+<p>or <code>gcc -D_POSIX_C_SOURCE=200809L file.c</code>. It hides implementation-defined extensions so only that POSIX version is visible.</p>
+</section>
+
+<!-- ================= 4 ================= -->
+<section id="oddeven">
+<h2>4. Barriers and odd-even sort</h2>
+<p class="source">Lecture 3</p>
+<p class="lead">Odd-even transposition sort parallelizes because each phase's compare-swaps touch disjoint pairs. A barrier keeps every thread in the same phase.</p>
+
+<h3>Barrier vs join</h3>
+<ul>
+<li><code>pthread_join</code> waits for <em>one</em> thread, <em>once</em>, until it <em>ends</em>.</li>
+<li>A <strong>barrier</strong> holds <em>many</em> threads, <em>repeatedly</em>, at a point in ongoing execution. Nobody passes until everyone arrives; the last arrival releases them all.</li>
+</ul>
+<pre><code>pthread_barrier_t barrier;
+pthread_barrier_init(&amp;barrier, NULL, count);   /* count = threads required */
+int rc = pthread_barrier_wait(&amp;barrier);       /* every participant calls this */
+/* exactly one arbitrary thread gets PTHREAD_BARRIER_SERIAL_THREAD; the rest get 0 */
+pthread_barrier_destroy(&amp;barrier);</code></pre>
+<p>It resets automatically after each release, so reuse it every round. Barriers are an <strong>optional</strong> POSIX feature (the textbook builds its own); the course's Docker image has them.</p>
+
+<h3>Serial odd-even transposition sort</h3>
+<ul>
+<li>Even phase: compare-swap (a[0],a[1]), (a[2],a[3]), …</li>
+<li>Odd phase: compare-swap (a[1],a[2]), (a[3],a[4]), …</li>
+<li><strong>n elements need at most n phases.</strong> Trace: 5 9 4 3 → even: 5 9 3 4 → odd: 5 3 9 4 → even: 3 5 4 9 → odd: 3 4 5 9.</li>
+<li>Plain bubble sort has no concurrency because each compare depends on the previous swap. Decoupling the compare-swaps into phases is what makes this variant parallel.</li>
+</ul>
+
+<h3>The block (parallel) version</h3>
+<ol>
+<li>Each of p threads owns a contiguous block of n/p elements and <strong>qsorts it locally</strong> once.</li>
+<li>Then p phases. In each phase paired threads do a <strong>compare-split</strong>: merge the two sorted blocks; the lower rank keeps the smaller half and the higher rank keeps the larger half.</li>
+<li><strong>p blocks need at most p phases.</strong></li>
+</ol>
+<div class="table-wrap"><table>
+<thead><tr><th>Phase</th><th>Even rank's partner</th><th>Odd rank's partner</th></tr></thead>
+<tbody>
+<tr><td>Even</td><td>rank + 1</td><td>rank − 1</td></tr>
+<tr><td>Odd</td><td>rank − 1</td><td>rank + 1</td></tr>
+</tbody></table></div>
+<p>If the partner is outside 0…p−1, the thread is idle that phase but <strong>still calls every barrier</strong>; otherwise the count is never reached. With p = 4, even phases pair (0,1) and (2,3); odd phases pair (1,2), and threads 0 and 3 are idle.</p>
+<p><strong>Two barriers per phase</strong>, because the partner's block is read straight from shared memory:</p>
+<ul>
+<li>Barrier 1, before any reads: everyone has finished last phase's writes, so reads see consistent data.</li>
+<li>Barrier 2, after all reads and before any writes: nobody overwrites their block while a slower partner is still reading it.</li>
+<li>Drop either one and you get a race: merging half-old, half-new data.</li>
+</ul>
+<p>Lecture trace (p = 4, n = 16) after the local sorts: t0 15 27 33 36 | t1 35 36 42 43 | t2 12 21 27 49 | t3 6 9 18 40. After 4 phases: 6 9 12 15 | 18 21 27 27 | 33 35 36 36 | 40 42 43 49.</p>
+<div class="callout">
+<p><strong>The prof's review questions.</strong> Time the local sort (it's part of the algorithm) but not the random initialization. Phases scale with p, each merging O(n/p) data, instead of one O(n) serial merge on one thread. The remaining serial part is mostly barrier waiting and threads idling in odd phases.</p>
+</div>
+</section>
+
+<!-- ================= 5 ================= -->
+<section id="sync">
+<h2>5. Thread synchronization</h2>
+<p class="source">Lecture 5, textbook Ch. 4.4–4.9 and 4.11</p>
+<p class="lead">Any shared variable that at least one thread writes needs protection. Use the cheapest tool that fits: disjoint writes plus barriers, then a mutex, then a condition variable or semaphore.</p>
+
+<h3>Race conditions</h3>
+<p>A <strong>race condition</strong> happens when several threads access shared data, at least one writes, and the result depends on timing. <code>x++</code> is three instructions, so it is <strong>not atomic</strong>:</p>
+<pre><code>load  r, &amp;x     /* T1 loads 5          T2 loads 5           */
+inc   r         /* T1 has 6            T2 has 6             */
+store r, &amp;x     /* T1 stores 6         T2 stores 6 → one increment lost */</code></pre>
+<p>counter1.c: two threads × 1,000,000 increments rarely gives 2,000,000. An <strong>atomic</strong> operation cannot be interrupted by a context switch. A <strong>critical section</strong> is code where a race can occur; <strong>mutual exclusion</strong> means only one thread is inside at a time. Critical sections run serially, so keep them few and short.</p>
+
+<h3>Choosing a tool</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Tool</th><th>Use for</th><th>Waiting threads</th><th>Key calls</th><th>Watch out</th></tr></thead>
+<tbody>
+<tr><td>Busy-wait flag</td><td>Ordered access</td><td>Spin at 100% CPU</td><td><code>while (flag != my_rank);</code></td><td>Compiler reordering (use <code>volatile</code>); collapses with more threads than cores</td></tr>
+<tr><td>Mutex</td><td>Mutual exclusion</td><td>Sleep</td><td><code>pthread_mutex_lock / unlock</code></td><td>Entry order is random; the owner must unlock</td></tr>
+<tr><td>Semaphore</td><td>Producer–consumer signalling</td><td>Sleep</td><td><code>sem_init(&amp;s, 0, v)</code>, <code>sem_wait</code>, <code>sem_post</code></td><td>POSIX, not Pthreads (<code>&lt;semaphore.h&gt;</code>); no owner</td></tr>
+<tr><td>Condition variable</td><td>Sleep until a condition holds</td><td>Sleep; mutex released meanwhile</td><td><code>pthread_cond_wait</code>, <code>_signal</code>, <code>_broadcast</code></td><td>Always with a mutex; re-check in a <code>while</code></td></tr>
+<tr><td>Read-write lock</td><td>Read often, write rarely</td><td>Sleep</td><td><code>pthread_rwlock_rdlock / wrlock</code></td><td>Many readers or one writer</td></tr>
+<tr><td>Barrier</td><td>Everyone finishes step i before step i+1</td><td>Sleep</td><td><code>pthread_barrier_wait</code></td><td>Every participant must call it</td></tr>
+</tbody></table></div>
+
+<h3>Mutex pattern</h3>
+<pre><code>pthread_mutex_t m;                       /* or = PTHREAD_MUTEX_INITIALIZER */
+pthread_mutex_init(&amp;m, NULL);
+pthread_mutex_lock(&amp;m);
+shared_sum += my_sum;                    /* critical section: keep it tiny */
+pthread_mutex_unlock(&amp;m);
+pthread_mutex_destroy(&amp;m);</code></pre>
+<p>Variants: <code>pthread_mutex_timedlock</code> gives up after a timeout; <code>pthread_rwlock_t</code> allows many readers.</p>
+
+<h3>The π example: the classic performance lesson</h3>
+<p>π = 4(1 − 1/3 + 1/5 − …). Each thread sums a block of terms into a shared <code>sum</code>.</p>
+<ul>
+<li>No protection: race, wrong answer with two or more threads.</li>
+<li>Busy-wait <strong>inside the loop</strong> (every term): threads take turns; 2 threads took 19.5 s vs 2.8 s serial.</li>
+<li>Sum into a <strong>private my_sum</strong> and enter the critical section <strong>once after the loop</strong>: 1.5 s with 2 threads.</li>
+<li>Up to the core count, busy-wait and mutex versions tie (2.90, 1.45, 0.73, 0.38 s for 1, 2, 4, 8 threads on 8 cores). With 16, 32, 64 threads busy-wait takes 0.50, 0.80, 3.56 s while the mutex stays at 0.38–0.40 s: a spinning thread can hold a core while the thread whose turn it is sits descheduled.</li>
+</ul>
+<div class="callout"><p>Lesson: <strong>enter critical sections as rarely as possible</strong>. Do local work privately and combine once.</p></div>
+
+<h3>Producer–consumer and semaphores</h3>
+<p>A mutex can't express "wait until another thread has done X", because it starts unlocked and only its owner may unlock it. A semaphore can: start it at 0, the producer posts, the consumer waits.</p>
+<pre><code>/* thread my_rank sends to dest = (my_rank + 1) % n; all semaphores start at 0 */
+messages[dest] = my_msg;
+sem_post(&amp;semaphores[dest]);       /* "you have mail" */
+sem_wait(&amp;semaphores[my_rank]);    /* wait for mine   */
+printf("%s\n", messages[my_rank]);</code></pre>
+<p>A binary semaphore initialized to 1 works as a mutex (wait = lock, post = unlock).</p>
+
+<h3>Condition variables</h3>
+<p>The consumer in msgqueue.c spun on <code>getMessage()</code> at 100% CPU even while producers slept (gprof counted 1.27 billion calls). The fix is to sleep on a condition variable:</p>
+<pre><code>/* consumer */
+pthread_mutex_lock(&amp;m);
+while (queue_empty())               /* while, not if: spurious wake-ups, stolen items */
+    pthread_cond_wait(&amp;c, &amp;m);      /* unlocks m and sleeps; re-locks before returning */
+msg = dequeue();
+pthread_mutex_unlock(&amp;m);
+
+/* producer */
+pthread_mutex_lock(&amp;m);
+enqueue(msg);
+pthread_cond_signal(&amp;c);            /* wake one waiter (broadcast wakes all) */
+pthread_mutex_unlock(&amp;m);</code></pre>
+<p>CPU use drops from about 100% to about 0%. A condition variable doesn't test anything itself; it's a waiting queue.</p>
+
+<h3>Building a barrier yourself (Ch. 4.8)</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Implementation</th><th>Problem</th></tr></thead>
+<tbody>
+<tr><td>Mutex-protected counter + <code>while (counter &lt; n);</code></td><td>Burns CPU; the counter can't be safely reset, so each barrier needs its own</td></tr>
+<tr><td>Two semaphores (count_sem = 1 guards the counter, barrier_sem = 0 blocks; the last thread posts n − 1 times)</td><td>Reusing barrier_sem for a second barrier races</td></tr>
+<tr><td>Mutex + condition variable (last thread resets the counter and broadcasts)</td><td>The clean solution; wait in a loop</td></tr>
+</tbody></table></div>
+
+<h3>Read-write locks and the linked list (Ch. 4.9)</h3>
+<p>Concurrent Member calls are safe; Insert or Delete alongside anything else is not (a reader can follow a pointer into a freed node). Textbook timings, 1000 keys, 100,000 operations:</p>
+<ul>
+<li>99.9% Member: rwlock 0.213 / 0.123 / 0.098 / 0.115 s (1/2/4/8 threads) beats one mutex (0.211 / 0.450 / 0.385 / 0.457) and one mutex per node (1.68 / 5.70 / 3.45 / 2.70).</li>
+<li>80% Member: rwlock and one mutex nearly tie (about 5 s with 2 or more threads), both slower than 1 thread.</li>
+<li>One mutex per node is finer-grained but costs two lock calls per node visited plus memory, and was always worst.</li>
+</ul>
+
+<h3>Thread safety (Ch. 4.11)</h3>
+<p>A function is <strong>thread-safe</strong> if it works correctly when several threads call it at once. Unsafe functions usually hide shared state in <strong>static</strong> variables: <code>strtok</code>, <code>rand</code>, <code>localtime</code>. Use reentrant versions such as <code>strtok_r</code> with your own save pointer. <strong>Incorrect programs can produce correct output</strong>: the tokenizer worked on its first run and failed on the second. One correct run proves nothing.</p>
+
+<h3>Debugging tools (Lecture 5)</h3>
+<ul>
+<li><code>gcc -pg</code>, run, then <code>gprof</code> for a function-level profile (it found the busy-wait).</li>
+<li><code>nproc --all</code> shows available cores (Docker may get fewer).</li>
+<li><code>valgrind --fair-sched=yes ./prog</code> for leaks. <strong>Always</strong> pass <code>--fair-sched=yes</code> or threaded code may hang.</li>
+<li><code>valgrind --tool=drd --fair-sched=yes ./prog</code> for data races (used to grade A1).</li>
+<li>DRD runs one thread at a time, so counter1.c prints the <em>correct</em> 2,000,000 yet DRD still reports the race.</li>
+<li>DRD hides leak output, so run leak checks and race checks separately. DRD also flags printf; disable output with <code>#ifdef</code> or use <code>write()</code> while race-testing.</li>
+<li>Check correctness against a serial version on known inputs; start small and test iteratively.</li>
+</ul>
+</section>
+
+<!-- ================= 6 ================= -->
+<section id="perf">
+<h2>6. Performance analysis</h2>
+<p class="source">Lecture 6, textbook Ch. 2.6</p>
+<p class="lead">Theory (big-O, Amdahl's bound) sets expectations; repeated timed runs plus statistics check them.</p>
+
+<h3>Speedup and efficiency</h3>
+<div class="formula">S = T_serial / T_parallel<br>E = S / p = T_serial / (p × T_parallel)</div>
+<ul>
+<li>Linear (perfect) speedup: S = p and E = 1. In practice S &lt; p and E &lt; 1 because of overhead and serial parts.</li>
+<li>Overhead model: T_parallel = T_serial / p + T_overhead. Then E × T_parallel = T_serial / p is the time each core spends on the real problem.</li>
+<li>Example: T_serial = 24 ms, p = 8, T_parallel = 4 ms → E = 24 / (8 × 4) = 0.75: 3 ms useful and 1 ms overhead per core.</li>
+<li>Fixed problem size, more threads: E usually falls. Fixed threads, bigger problem: S and E usually rise.</li>
+<li>Use T_serial from the serial program on one core of the <em>same</em> machine.</li>
+</ul>
+
+<h3>Amdahl's law</h3>
+<p>If a fraction r of the program can't be parallelized and the rest gets perfect speedup:</p>
+<div class="formula">T_parallel = r × T_serial + (1 − r) × T_serial / p<br>S(p) = 1 / (r + (1 − r)/p) ≤ 1/r</div>
+<ul>
+<li>90% parallel, T_serial = 20 s: T_parallel = 18/p + 2, so S ≤ 20/2 = 10 however many cores you add.</li>
+<li>r = 1/100 → S ≤ 100 even on thousands of cores.</li>
+<li>Why not to despair: the serial fraction often shrinks as the problem grows (<strong>Gustafson's law</strong>), many real programs get huge speedups, and 5–10× may be plenty.</li>
+</ul>
+
+<h3>Scalability</h3>
+<p>A program is <strong>scalable</strong> if, as p grows, you can grow the problem size at some rate that keeps E constant.</p>
+<ul>
+<li><strong>Strongly scalable</strong>: E stays constant with the problem size <em>fixed</em>.</li>
+<li><strong>Weakly scalable</strong>: E stays constant when the problem size grows <em>at the same rate as</em> p.</li>
+<li>Example: T_serial = n, T_parallel = n/p + 1 → E = n / (n + p). Multiply both n and p by k: E = kn / (kn + kp) = n / (n + p). Weakly scalable.</li>
+</ul>
+
+<h3>Taking timings</h3>
+<ul>
+<li>Time only the part you care about, not I/O or setup. The shell's <code>time</code> measures the whole program.</li>
+<li>Report <strong>wall-clock</strong> time, not CPU time; CPU time misses time spent blocked.</li>
+<li>Pattern: barrier → each thread records its start → work → each records its finish → take the <strong>max</strong> elapsed.</li>
+<li>Check the timer's resolution; a millisecond timer can't time a 0.001 s run.</li>
+<li>The textbook reports the <strong>minimum</strong> of several runs; the lecture wants the whole distribution analysed. Know both.</li>
+<li>Run at most one thread per core; more adds scheduling time and variability.</li>
+</ul>
+
+<h3>Empirical analysis, the prof's way</h3>
+<ol>
+<li>Hypothesize: for the sum, run time ∝ n/p + log p, so doubling p roughly halves the time, doubling n roughly doubles it, and speedup stays below p.</li>
+<li>Run each (n, p) combination many times (20–25), because run time varies.</li>
+<li><strong>Plot the distribution</strong> (histograms, box plots) before computing anything.</li>
+<li>Compare with a statistical test (paired t-test; p-value &lt; 0.05 means unlikely to be chance). Several t-tests need a Bonferroni correction.</li>
+</ol>
+<div class="table-wrap"><table>
+<thead><tr><th>Histogram shape</th><th>Meaning</th><th>What to do</th></tr></thead>
+<tbody>
+<tr><td>One roughly symmetric hill</td><td>Fine</td><td>Mean and t-test are OK (the t-test assumes normality)</td></tr>
+<tr><td>Right-skewed (tail to the right)</td><td>Common: mostly near best case, occasional slow runs from scheduling or other load</td><td>Run more trials; if it stays skewed, use the <strong>median</strong> and a test that doesn't assume normality</td></tr>
+<tr><td>Left-skewed</td><td>Weird: rare fast runs</td><td>Investigate</td></tr>
+<tr><td>Two or more hills (bimodal)</td><td>Several distinct run-time classes; any single average is meaningless</td><td>Run more trials (too few can fake hills), check the bin count, find the cause</td></tr>
+<tr><td>Flat (uniform)</td><td>Run time is random; something is badly wrong</td><td>Investigate</td></tr>
+</tbody></table></div>
+<p><strong>Speedup plots</strong> catch problems run-time plots hide. Observed speedup should sit <em>below</em> the perfect line y = p. <strong>Superlinear</strong> speedup, above the line, from an algorithm that can't do that usually means cache effects (smaller per-core working sets fit in cache), user error, too few trials, a timing bug, or scheduler quirks on very short runs.</p>
+<p>Lecture example (25 runs, means): serial ≈ 20 s, 2 cores ≈ 12 s, 4 ≈ 6.5 s, 8 ≈ 3.5 s → S ≈ 1.67, 3.08, 5.71 and E ≈ 0.83, 0.77, 0.71.</p>
+</section>
+
+<!-- ================= 7 ================= -->
+<section id="hw">
+<h2>7. Hardware and caches</h2>
+<p class="source">Lecture 7, textbook Ch. 2.1–2.2 and 4.10</p>
+<p class="lead">Memory is far slower than the CPU, so caches and contiguous data decide real performance. ILP is the CPU's own fine-grained parallelism; threads are ours.</p>
+
+<h3>The von Neumann model</h3>
+<ul>
+<li>Main memory (addressed locations holding instructions <em>and</em> data), a CPU (control unit decides which instruction runs; the ALU or datapath executes it), registers, and an interconnect (bus). The program counter holds the next instruction's address.</li>
+<li><strong>von Neumann bottleneck</strong>: the CPU–memory interconnect limits how fast instructions and data arrive. CPUs execute over 100× faster than they can fetch from memory, so the CPU starves for data.</li>
+<li>A process is an executable plus memory (code, stack, heap), file descriptors, security information and state. Threads share most of that and keep their own stack and program counter.</li>
+</ul>
+
+<h3>Caches</h3>
+<ul>
+<li><strong>Hit</strong>: the data is in cache. <strong>Miss</strong>: fetch the whole <strong>cache line</strong> (typically 8–16 times one location, e.g. 64 bytes = 8 doubles), possibly stalling.</li>
+<li>Levels: L1 (smallest, fastest, per core) → L2 → L3 (largest, slowest, often shared). Check L1 first, then L2, and so on, then memory.</li>
+<li><strong>Spatial locality</strong>: the next access is nearby (z[i+1] after z[i]). <strong>Temporal locality</strong>: the same location again soon.</li>
+<li><strong>Write-through</strong> updates memory on every write. <strong>Write-back</strong> marks the line dirty and writes it only when evicted.</li>
+<li>Mappings (16-line memory, 4-line cache): fully associative = any slot; direct-mapped = slot is line mod 4; n-way set associative = one of n slots in a set. Eviction is usually least recently used.</li>
+<li><strong>Row-major order</strong>: C stores A[i][j] row after row. With i outer and j inner you walk memory contiguously. Textbook: MAX = 4, lines of 4 doubles, a 2-line direct-mapped cache: row order 4 misses, column order 16 (every access). With MAX = 1000 row order ran about 3× faster.</li>
+</ul>
+<p>The lecture's rules for cache-friendly data: structs instead of objects, no pointers inside structs, contiguous arrays instead of linked lists, 2D arrays as 1D arrays with index math (<code>a[i*N + j]</code>), and complex objects as several flat 1D buffers (vertex, index and texture buffers in a 3D model). Contiguous data is easy to cache <em>and</em> easy to transfer, which matters for MPI and GPUs.</p>
+
+<h3>Virtual memory (Ch. 2.2.4)</h3>
+<p>Main memory acts as a cache for disk (swap space). Blocks are <strong>pages</strong> (4–16 KB). An address is a virtual page number plus a byte offset; 4 KB pages use the low 12 bits as the offset because 2¹² = 4096. A <strong>page table</strong> maps virtual to physical pages; the <strong>TLB</strong> caches recent translations (16–512 entries). A page that's only on disk causes a <strong>page fault</strong>. Virtual memory always uses write-back.</p>
+
+<h3>Instruction-level parallelism</h3>
+<p>ILP is done by the CPU and compiler (e.g. <code>-O2</code>), not by you.</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Pipelining</th><th>Multiple issue</th></tr></thead>
+<tbody>
+<tr><td>Idea</td><td>Different stages of different instructions at once, like an assembly line</td><td>The same operation several times at once on duplicated units</td></tr>
+<tr><td>FP add example</td><td>7 stages: fetch, compare exponents, shift, add, normalize, round, store</td><td>Two FP adders compute z[0] and z[1] together: about 500 steps for 1000 adds</td></tr>
+<tr><td>Limit</td><td>Runs at the speed of the slowest stage; stalls (operand not ready, cache miss)</td><td>Needs independent instructions</td></tr>
+</tbody></table></div>
+<p>Pipeline timing: k stages of 1 ns and n operations take k·n ns unpipelined and k + n − 1 ns pipelined. Textbook: 1000 adds, 7 stages → 7000 ns vs 1006 ns (about 7×).</p>
+<ul>
+<li><strong>Static</strong> multiple issue is scheduled at compile time; <strong>dynamic</strong> at run time (<strong>superscalar</strong>).</li>
+<li><strong>Speculation</strong>: guess a branch outcome or that pointers don't alias, execute ahead, and discard the result if wrong. It hides stalls even on single-issue CPUs.</li>
+<li>ILP fails on dependency chains like <code>f[i] = f[i-1] + f[i-2]</code> (Fibonacci).</li>
+</ul>
+
+<h3>Threads and hyper-threading</h3>
+<ul>
+<li><strong>Thread-level parallelism</strong> (our threads) is <strong>coarser-grained</strong> than ILP: whole chunks of code instead of single instructions.</li>
+<li>Hardware multithreading: fine-grained (switch threads every instruction), coarse-grained (switch only on long stalls), and <strong>SMT</strong> (several threads share a superscalar core's units at once).</li>
+<li><strong>Hyper-threading</strong> is Intel's SMT: each physical core appears as two. When one thread stalls on memory the other runs. It helps somewhat, but <strong>one hyper-threaded core is slower than two physical cores</strong>.</li>
+</ul>
+
+<h3>Cache coherence and false sharing</h3>
+<ul>
+<li><strong>Cache coherence problem</strong>: two cores cache the same variable, one writes it, and the other may keep using its stale copy. Hardware fixes this by <strong>snooping</strong> (broadcast updates on the bus; other caches invalidate their copy) or with <strong>directories</strong> (a table of which cores hold each line; scales better).</li>
+<li>Coherence works on whole <strong>cache lines</strong>: one write invalidates the entire line in other caches.</li>
+<li><strong>False sharing</strong>: threads write <em>different</em> variables in the <em>same</em> line, so the line bounces between caches. Results stay correct; performance collapses.</li>
+<li>Textbook matrix-vector multiply (same work, 4 threads): 8,000,000 × 8 had E = 0.571 and 8000 × 8000 had E = 0.555, but 8 × 8,000,000 had E = 0.275. There y is just 8 doubles (one cache line) and every thread updates 2 of them millions of times.</li>
+<li>Fixes: accumulate in a <strong>private local variable</strong> and write the shared slot once, or <strong>pad</strong> each thread's data onto its own cache line.</li>
+</ul>
+</section>
+
+<!-- ================= 8 ================= -->
+<section id="heat">
+<h2>8. Heat diffusion case study</h2>
+<p class="source">Lecture 8</p>
+<p class="lead">Each iteration, every interior cell becomes the average of its four neighbours' <em>old</em> values. Threads own bands of rows, and two barriers around one serial step make it race-free without locks.</p>
+
+<h3>The model</h3>
+<ul>
+<li>A 2D grid: the outer ring is fixed <strong>cold</strong> (0), a centred K × K block is fixed <strong>hot</strong> (the "candle"), and everything else updates.</li>
+<li>Update rule: <code>next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])</code>.</li>
+<li><strong>Double buffering</strong> (ping-pong buffers): read only <code>cur</code>, write only <code>next</code>, swap at the end of each step. Without two grids you'd read neighbours already at step t+1. With them, any traversal order gives bit-identical results, which is what makes this easy to parallelize.</li>
+<li>Each finished grid is a <strong>frame</strong>.</li>
+<li>Stop when <code>max_diff &lt; EPSILON</code> (largest per-cell change, e.g. 10⁻⁴) <strong>or</strong> the iteration cap is reached. The 16 × 16 toy run converged in 69 iterations; 512 × 512 takes about 2200. It settles into a hot-to-cold gradient, never all cold, because the source stays on.</li>
+</ul>
+
+<h3>Foster's steps</h3>
+<ol>
+<li><strong>Partition</strong>: one task per cell. All cells in an iteration are independent; iteration t+1 depends on all of iteration t.</li>
+<li><strong>Communication</strong>: each cell reads its four neighbours' old values. In shared memory that's just a read.</li>
+<li><strong>Agglomerate</strong>: a contiguous band of <strong>rows</strong> per thread, because rows are contiguous in row-major memory. Fixed boundary rows 0 and N−1 aren't assigned to anyone.</li>
+<li><strong>Map</strong>: ⌊updatableRows/p⌋ rows each, with the first (updatableRows mod p) threads getting one extra. 16 × 16 on 4 threads: 14 rows → rows 1–4, 5–8, 9–11, 12–14. Each thread reads one row above and one below its band.</li>
+</ol>
+
+<h3>The per-thread loop</h3>
+<pre><code>while (1) {
+    localMax = 0.0;
+    for (i = rowStart; i &lt; rowEnd; i++)
+        for (j = 1; j &lt; N-1; j++) {
+            if (is_fixed(i,j)) { next[i][j] = cur[i][j]; continue; }
+            next[i][j] = 0.25*(cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1]);
+            localMax = fmax(localMax, fabs(next[i][j] - cur[i][j]));
+        }
+    thread_max_diff[tid] = localMax;          /* own slot: no lock */
+    pthread_barrier_wait(&amp;b1);               /* all of next[] and max_diff[] written */
+    if (tid == 0) {                           /* serial section */
+        globalMax = max over thread_max_diff[];
+        swap(cur, next);
+        if (iter % FRAME_STRIDE == 0) writeFrame(cur);
+        if (globalMax &lt; EPSILON || iter &gt;= MAX_ITERS-1) converged = 1;
+        iter++;
+    }
+    pthread_barrier_wait(&amp;b2);               /* everyone sees the swap and converged */
+    if (converged) break;
+}</code></pre>
+<p><strong>Why no mutexes</strong>: writes are disjoint (each thread writes only its own rows of <code>next</code> and its own <code>thread_max_diff[tid]</code>), and barriers separate the parallel phase from thread 0's serial phase. A single-threaded section must be <strong>closed on both sides</strong>: barrier 1 so thread 0 reads finished data, barrier 2 so everyone else reads thread 0's results.</p>
+<p>Without barrier 2, fast threads start the next iteration before the swap and the converged flag are visible, so they read the wrong grid or miss termination. A misplaced barrier shows up as visible <strong>seams at band boundaries</strong> in the rendered frames.</p>
+<p>The prof's correctness test: run with 1, 4 and 7 threads and diff the frames; they must be identical. This case study returns in the MPI unit, where reading a neighbour's row becomes a <strong>halo exchange</strong> of messages.</p>
+</section>
+
+<!-- ================= Cheat sheet ================= -->
+<section id="cheat">
+<h2>Cheat sheet</h2>
+<p class="lead">Write this from memory two days before the exam, then compare.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Quantity</th><th>Formula</th></tr></thead>
+<tbody>
+<tr><td>Speedup</td><td>S = T_serial / T_parallel</td></tr>
+<tr><td>Efficiency</td><td>E = S / p = T_serial / (p · T_parallel)</td></tr>
+<tr><td>Overhead model</td><td>T_parallel = T_serial / p + T_overhead</td></tr>
+<tr><td>Amdahl (serial fraction r)</td><td>S = 1 / (r + (1 − r)/p) ≤ 1/r</td></tr>
+<tr><td>Parallel sum time</td><td>O(n/p) + O(log p)</td></tr>
+<tr><td>Serial vs tree reduction</td><td>p − 1 vs ⌈log₂ p⌉ steps</td></tr>
+<tr><td>Work split</td><td>count = ⌊n/p⌋ + (rank &lt; n mod p); first = rank·⌊n/p⌋ + min(rank, n mod p)</td></tr>
+<tr><td>Odd-even sort phases</td><td>at most n (elements) or p (blocks)</td></tr>
+<tr><td>Pipeline, k stages, n ops</td><td>unpipelined k·n; pipelined k + n − 1</td></tr>
+<tr><td>10 years of growth</td><td>1.5¹⁰ ≈ 58; 1.2¹⁰ ≈ 6.2</td></tr>
+<tr><td>Weak scalability check</td><td>E(kn, kp) = E(n, p)</td></tr>
+</tbody></table></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Need</th><th>Call</th></tr></thead>
+<tbody>
+<tr><td>Start and wait</td><td><code>pthread_create(&amp;tid, NULL, fn, arg)</code>, <code>pthread_join(tid, &amp;ret)</code></td></tr>
+<tr><td>Detach</td><td><code>pthread_attr_init</code> → <code>pthread_attr_setdetachstate(&amp;a, PTHREAD_CREATE_DETACHED)</code> → create → <code>pthread_attr_destroy</code></td></tr>
+<tr><td>Mutex</td><td><code>pthread_mutex_init(&amp;m, NULL)</code>, <code>_lock</code>, <code>_unlock</code>, <code>_destroy</code>, <code>PTHREAD_MUTEX_INITIALIZER</code></td></tr>
+<tr><td>Condition variable</td><td><code>pthread_cond_wait(&amp;c, &amp;m)</code> inside a while loop, <code>_signal</code>, <code>_broadcast</code></td></tr>
+<tr><td>Barrier</td><td><code>pthread_barrier_init(&amp;b, NULL, n)</code>, <code>pthread_barrier_wait(&amp;b)</code></td></tr>
+<tr><td>Semaphore</td><td><code>#include &lt;semaphore.h&gt;</code>, <code>sem_init(&amp;s, 0, v)</code>, <code>sem_wait</code>, <code>sem_post</code></td></tr>
+<tr><td>Read-write lock</td><td><code>pthread_rwlock_rdlock</code>, <code>_wrlock</code>, <code>_unlock</code></td></tr>
+<tr><td>Build</td><td><code>gcc -O2 -std=c99 -pthread x.c</code>; <code>-D_POSIX_C_SOURCE=200809L</code></td></tr>
+<tr><td>Check</td><td><code>valgrind --fair-sched=yes</code>, <code>valgrind --tool=drd --fair-sched=yes</code>, <code>gcc -pg</code> + <code>gprof</code>, <code>nproc --all</code></td></tr>
+</tbody></table></div>
+<h3>Pitfalls the exam can test</h3>
+<ul>
+<li>Passing <code>&amp;loop_var</code> to pthread_create; forgetting to join (leak); main returning early.</li>
+<li>Locking inside a hot loop instead of once at the end.</li>
+<li><code>if</code> instead of <code>while</code> around <code>pthread_cond_wait</code>.</li>
+<li>An idle thread skipping a barrier.</li>
+<li>Busy-waiting with optimization on, or with more threads than cores.</li>
+<li>False sharing on neighbouring per-thread slots that are written repeatedly.</li>
+<li>Using the mean on skewed or bimodal timing data; trusting one correct run.</li>
+</ul>
+</section>
+
+      </article>
+    </div>
+  </main>
+  <script src="assets/common.js"></script>
+  <script>
+    (function () {
+      const links = Array.from(document.querySelectorAll('.toc a'));
+      const sections = links.map(a => document.querySelector(a.getAttribute('href')));
+      if (!('IntersectionObserver' in window)) return;
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+          }
+        });
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      sections.forEach(s => s && obs.observe(s));
+    })();
+  </script>
+</body>
+</html>
