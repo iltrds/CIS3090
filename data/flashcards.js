@@ -115,5 +115,15 @@ window.FLASHCARDS = [
   { topic: 'heat', front: 'Heat: the two barriers', back: 'B1: all rows and max_diff written before thread 0 reduces and swaps. B2: thread 0\'s swap and converged flag visible before anyone continues.' },
   { topic: 'heat', front: '"Look ma, no locks"', back: 'Disjoint writes (own rows, own max_diff slot) plus barriers make the heat code race-free without mutexes.' },
   { topic: 'heat', front: 'Testing the heat code', back: 'Run with 1, 4 and 7 threads and diff the frames; they must be identical. Seams at band edges signal a barrier bug.' },
-  { topic: 'heat', front: 'Heat in the MPI unit', back: 'Neighbour rows live in another process, so each iteration needs a halo exchange of messages.' }
+  { topic: 'heat', front: 'Heat in the MPI unit', back: 'Neighbour rows live in another process, so each iteration needs a halo exchange of messages.' },
+  /* Recommended review exercises */
+  { topic: 'review', front: 'Deadlock (4.9)', back: 'Threads block forever, each holding a lock another needs. Two threads taking mut0 and mut1 in opposite orders is the classic case.' },
+  { topic: 'review', front: 'How to prevent the two-mutex deadlock', back: 'Acquire locks in the **same global order** in every thread (e.g. always mut0 before mut1). Switching to semaphores or spinning flags does not fix it.' },
+  { topic: 'review', front: 'Balancing work that grows with i (1.2)', back: 'Assign by work, not count: cyclic (core c gets c, c+p, …) or snake order, or block boundaries from the running total. Equal blocks leave the last core with the most work.' },
+  { topic: 'review', front: 'pthread_create keeps failing with EAGAIN (4.7)', back: 'Joinable threads that are never joined keep their resources. Join them, or detach them so they free resources when they finish.' },
+  { topic: 'review', front: 'Read lock to search, write lock to update? (4.13)', back: 'Unsafe: the list can change between releasing the read lock and getting the write lock. Hold the write lock for the whole Insert/Delete, or re-check.' },
+  { topic: 'review', front: 'Which threads can falsely share y? (4.17)', back: 'Only threads with adjacent blocks, at the boundary. In 8000 × 8000 with 4 threads, threads 0 and 2 are 2001 elements apart: impossible.' },
+  { topic: 'review', front: 'Two fixes for false sharing on y (4.19)', back: '(a) Pad y so each thread\'s elements sit on their own cache lines. (b) Accumulate in thread-private storage and write y once at the end.' },
+  { topic: 'review', front: 'Shared vs private in the shared-memory tree sum (2.24)', back: 'Shared: the loc_bin_cts rows, bin_count, thread_count, the barrier. Private: my_rank, divisor, diff, partner, loop index.' },
+  { topic: 'review', front: 'Histogram split by bins vs by data (2.23)', back: 'By bins: no races, but every thread reads all n elements, so time stays O(n). By data: O(n/p) per thread plus a tree sum. Splitting the data scales better.' }
 ];

@@ -22,6 +22,7 @@
       <div class="chip-row" role="radiogroup" aria-label="Exam version" id="versions">
         <button class="chip" type="button" role="radio" data-v="A" aria-pressed="true" aria-checked="true">Exam A: 50 new questions</button>
         <button class="chip" type="button" role="radio" data-v="B" aria-pressed="false" aria-checked="false">Exam B: 50 drawn from the quiz bank</button>
+        <button class="chip" type="button" role="radio" data-v="C" aria-pressed="false" aria-checked="false">Exam C: recommended-exercise focus</button>
       </div>
       <p class="muted" id="version-note">Exam A uses questions you won't have seen in the topic quizzes. Take it first, as your real benchmark.</p>
       <h2>Rules</h2>
@@ -92,6 +93,7 @@
 
   <script src="assets/common.js"></script>
   <script src="data/bank.js"></script>
+  <script src="data/review.js"></script>
   <script src="data/exam.js"></script>
   <script>
   (function () {
@@ -110,8 +112,16 @@
       el('versions').querySelectorAll('button').forEach(x => { x.setAttribute('aria-pressed', String(x === b)); x.setAttribute('aria-checked', String(x === b)); });
       el('version-note').textContent = version === 'A'
         ? 'Exam A uses questions you won\'t have seen in the topic quizzes. Take it first, as your real benchmark.'
+        : version === 'C'
+        ? 'Exam C has all 26 questions built from the prof\'s recommended exercises, plus 24 drawn from the other topics. The prof hinted some exam questions may come straight from that list.'
         : 'Exam B draws a fresh random 50 from the quiz bank each time, spread across all topics.';
     }));
+
+    function buildExamC() {
+      const review = window.REVIEW_BANK.slice();
+      const others = S.shuffle(window.QUIZ_BANK.filter(q => q.topic !== 'review')).slice(0, 50 - review.length);
+      return others.concat(review).sort((a, b) => S.TOPIC_ORDER.indexOf(a.topic) - S.TOPIC_ORDER.indexOf(b.topic));
+    }
 
     function buildExamB() {
       const bank = window.QUIZ_BANK;
@@ -127,7 +137,7 @@
     }
 
     function begin() {
-      const qs = version === 'A' ? window.EXAM_A.slice() : buildExamB();
+      const qs = version === 'A' ? window.EXAM_A.slice() : version === 'C' ? buildExamC() : buildExamB();
       const orders = {};
       qs.forEach(q => { orders[q.id] = S.optionOrder(q); });
       st = { version: version, ids: qs.map(q => q.id), orders: orders, answers: {}, flags: {}, start: Date.now(), timed: !el('untimed').checked };

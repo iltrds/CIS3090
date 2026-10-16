@@ -333,6 +333,25 @@ select { font: inherit; padding: 6px 8px; border-radius: var(--radius-s); border
   .race-mem { grid-column: 1 / -1; order: -1; }
 }
 
+
+/* ---------- Review exercises ---------- */
+.review-bar { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; justify-content: space-between; max-width: 1080px; margin-bottom: 6px; }
+.review-bar .fc-progress { width: 220px; margin: 6px 0 0; }
+.review-note { font-size: 0.92rem; margin: 0 0 22px; }
+.ex { border: 1px solid var(--rule); border-radius: var(--radius-m); background: var(--paper-2); padding: 14px 18px; margin: 0 0 14px; }
+.ex.is-done { border-left: 4px solid var(--ok); }
+.ex.optional .ex-num { background: transparent; color: var(--ink-2); border: 1px dashed var(--ink-2); }
+.ex-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.ex-num { font-family: var(--mono); font-weight: 600; font-size: 0.9rem; background: var(--ink); color: var(--paper); border-radius: 4px; padding: 1px 8px; }
+.ex-topic { font-weight: 700; flex: 1; min-width: 200px; }
+.ex-done { font-size: 0.9rem; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.ex-done input { accent-color: var(--ok); }
+.ex-prompt { color: var(--ink-2); margin: 8px 0 6px; }
+.ex details { margin-top: 4px; }
+.ex summary { cursor: pointer; color: var(--accent); font-weight: 700; padding: 4px 0; }
+.ex details[open] summary { margin-bottom: 6px; }
+.ex details > :last-child { margin-bottom: 0; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 880px) {
   .hero, .home-grid { grid-template-columns: 1fr; gap: 28px; }

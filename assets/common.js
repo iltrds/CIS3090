@@ -12,7 +12,8 @@
     sync: 'Thread synchronization',
     perf: 'Performance analysis',
     hw: 'Hardware and caches',
-    heat: 'Heat diffusion case study'
+    heat: 'Heat diffusion case study',
+    review: 'Recommended exercises (Moodle)'
   };
   const TOPIC_ORDER = Object.keys(TOPICS);
 
@@ -174,6 +175,7 @@
   const PAGES = [
     ['index.html', 'Home', 'home'],
     ['read.html', 'Read', 'read'],
+    ['review.html', 'Review', 'review'],
     ['flashcards.html', 'Flashcards', 'flashcards'],
     ['quiz.html', 'Quizzes', 'quiz'],
     ['exam.html', 'Practice exam', 'exam']

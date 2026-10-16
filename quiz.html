@@ -60,6 +60,7 @@
 
   <script src="assets/common.js"></script>
   <script src="data/bank.js"></script>
+  <script src="data/review.js"></script>
   <script>
   (function () {
     const S = window.Study;
@@ -182,6 +183,11 @@
     });
 
     buildPicker();
+    const want = new URLSearchParams(window.location.search).get('topic');
+    if (want && (want === 'mixed' || S.TOPICS[want])) {
+      if (new URLSearchParams(window.location.search).get('all')) el('length').value = 'all';
+      start(want);
+    }
   })();
   </script>
 </body>

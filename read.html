@@ -511,7 +511,7 @@ pthread_mutex_unlock(&amp;m);</code></pre>
 <li><strong>Cache coherence problem</strong>: two cores cache the same variable, one writes it, and the other may keep using its stale copy. Hardware fixes this by <strong>snooping</strong> (broadcast updates on the bus; other caches invalidate their copy) or with <strong>directories</strong> (a table of which cores hold each line; scales better).</li>
 <li>Coherence works on whole <strong>cache lines</strong>: one write invalidates the entire line in other caches.</li>
 <li><strong>False sharing</strong>: threads write <em>different</em> variables in the <em>same</em> line, so the line bounces between caches. Results stay correct; performance collapses.</li>
-<li>Textbook matrix-vector multiply (same work, 4 threads): 8,000,000 × 8 had E = 0.571 and 8000 × 8000 had E = 0.555, but 8 × 8,000,000 had E = 0.275. There y is just 8 doubles (one cache line) and every thread updates 2 of them millions of times.</li>
+<li>Textbook matrix-vector multiply (same work, 4 threads): 8,000,000 × 8 had E = 0.707 and 8000 × 8000 had E = 0.750, but 8 × 8,000,000 had E = 0.290 (Table 4.5). There y is just 8 doubles (one cache line) and every thread updates 2 of them millions of times.</li>
 <li>Fixes: accumulate in a <strong>private local variable</strong> and write the shared slot once, or <strong>pad</strong> each thread's data onto its own cache line.</li>
 </ul>
 </section>

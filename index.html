@@ -42,6 +42,7 @@
         <h2 id="study-h" style="margin-top:0">Study</h2>
         <ul class="study-list">
           <li><a href="read.html"><span class="name">Read</span><span class="desc">All eight topics from the lectures and textbook, with code, formulas and a cheat sheet.</span><span class="stat" id="stat-read">8 topics</span></a></li>
+          <li><a href="review.html"><span class="name">Review</span><span class="desc">The prof's recommended textbook exercises, each with a worked solution to reveal once you've tried it.</span><span class="stat" id="stat-review"></span></a></li>
           <li><a href="flashcards.html"><span class="name">Flashcards</span><span class="desc">Definitions, API calls and rules for the fill-in-the-blank questions.</span><span class="stat" id="stat-cards"></span></a></li>
           <li><a href="quiz.html"><span class="name">Topic quizzes</span><span class="desc">Multiple choice by topic, with an explanation after every answer.</span><span class="stat" id="stat-quiz"></span></a></li>
           <li><a href="exam.html"><span class="name">Practice exam</span><span class="desc">50 questions in 60 minutes, including code and graph questions, scored by topic.</span><span class="stat" id="stat-exam"></span></a></li>
@@ -53,6 +54,8 @@
         <dl class="facts">
           <dt>Format</dt>
           <dd>All multiple choice, roughly 50 questions in 60 minutes. That's about 72 seconds per question.</dd>
+          <dt>The review</dt>
+          <dd>The prof's review is the Week 5 recommended textbook exercises on Moodle, and he hinted some exam questions may come straight from it. They're all on the <a href="review.html">Review</a> page.</dd>
           <dt>Question styles</dt>
           <dd>Fill in the blank, a block of code with questions about it, and a graph with questions about it.</dd>
           <dt>Lectures</dt>
@@ -69,6 +72,7 @@
   <script src="assets/common.js"></script>
   <script src="data/flashcards.js"></script>
   <script src="data/bank.js"></script>
+  <script src="data/review.js"></script>
   <script>
     (function () {
       const S = window.Study;
@@ -82,9 +86,12 @@
       const known = S.store.get('cardsKnown', []);
       document.getElementById('stat-cards').textContent = known.length + ' of ' + window.FLASHCARDS.length + ' known';
 
+      const rdone = S.store.get('reviewDone', []);
+      document.getElementById('stat-review').textContent = rdone.length + ' of 20 done';
+
       const best = S.store.get('quizBest', {});
       const done = S.TOPIC_ORDER.filter(t => best[t]).length;
-      document.getElementById('stat-quiz').textContent = done + ' of 8 topics tried';
+      document.getElementById('stat-quiz').textContent = done + ' of ' + S.TOPIC_ORDER.length + ' topics tried';
 
       const attempts = S.store.get('examAttempts', []);
       document.getElementById('stat-exam').textContent = attempts.length
