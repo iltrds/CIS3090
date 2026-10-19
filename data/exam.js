@@ -133,7 +133,7 @@ for (j = 0; j < N; j++)
       options: ['8, 8, 7, 7', '7, 7, 7, 9', '8, 8, 8, 6', '7, 8, 7, 8'], answer: 0,
       why: '⌊30/4⌋ = 7, 30 mod 4 = 2, so threads 0 and 1 get 8.' },
     { id: 'e6', topic: 'design', kind: 'calc',
-      q: 'With the same split (n = 30, p = 4), thread 2\'s first index is ___.',
+      q: "n = 30 items over p = 4 threads: each gets ⌊n/p⌋ and the first n mod p threads get one extra. Thread 2's first index is ___.",
       options: ['16', '15', '14', '21'], answer: 0,
       why: 'first = 2·7 + min(2, 2) = 16. Threads cover 0–7, 8–15, 16–22, 23–29.' },
     { id: 'e7', topic: 'design', kind: 'concept',
@@ -149,7 +149,8 @@ for (j = 0; j < N; j++)
       options: ['n is only slightly larger than p', 'n is very large', 'p = 1', 'each compute() call takes minutes'], answer: 0,
       why: 'Then each core does little work before the reduction, so the reduction dominates.' },
     { id: 'e10', topic: 'design', kind: 'concept',
-      q: 'The histogram example on a GPU usually handles races on bin_counts with ___.',
+      ctx: "Histogram example (textbook Section 2.7): count how many of n data values fall into each of bin_count bins. p threads each take a contiguous block of data; for every element they find its bin b and increment `bin_counts[b]`.",
+      q: "On a GPU, which may run thousands of threads, the races on `bin_counts` are usually handled with ___.",
       options: ['fast atomic increments on one shared array', 'a private bin array for each of thousands of threads', 'one thread per bin', 'a barrier after every element'], answer: 0,
       why: 'Thousands of private copies would not fit; GPUs provide fast atomic increments.' },
 
@@ -185,11 +186,13 @@ for (j = 0; j < N; j++)
 
     /* ---------- Odd-even & barriers (5) ---------- */
     { id: 'e18', topic: 'oddeven', kind: 'calc',
-      q: 'Serial odd-even transposition sort on 4 2 3 1. After phase 0 (even) and phase 1 (odd), the list is ___.',
+      ctx: "Odd-even transposition sort alternates two kinds of phase.\nEven phase: compare-swap the pairs (a[0],a[1]), (a[2],a[3]), …\nOdd phase: compare-swap the pairs (a[1],a[2]), (a[3],a[4]), …",
+      q: "On the list 4 2 3 1, after phase 0 (even) and phase 1 (odd), the list is ___.",
       options: ['2 1 4 3', '2 4 1 3', '1 2 3 4', '2 1 3 4'], answer: 0,
       why: 'Even: (4,2)→2 4 and (3,1)→1 3 gives 2 4 1 3. Odd: (4,1)→1 4 gives 2 1 4 3.' },
     { id: 'e19', topic: 'oddeven', kind: 'calc',
-      q: 'Block odd-even sort with p = 8 threads needs at most ___ compare-split phases.',
+      ctx: "Block-parallel odd-even sort: each of p threads first sorts its own contiguous block with qsort. Then, in each phase, paired threads do a compare-split: merge their two sorted blocks; the lower-ranked thread keeps the smaller half and the higher-ranked thread the larger half.",
+      q: "With p = 8 threads, at most ___ compare-split phases are needed.",
       options: ['8', '3', '64', 'n'], answer: 0,
       why: 'p blocks need at most p phases.' },
     { id: 'e20', topic: 'oddeven', kind: 'calc',
@@ -201,7 +204,8 @@ for (j = 0; j < N; j++)
       options: ['A barrier makes many threads wait for each other, repeatedly, at a point in execution; join waits once for one thread to end', 'A barrier terminates threads', 'join can be reused every round', 'A barrier waits for one specific thread'], answer: 0,
       why: 'The barrier auto-resets so it can be used in every phase.' },
     { id: 'e22', topic: 'oddeven', kind: 'calc',
-      q: 'Thread 0 holds {3, 8, 10} and thread 1 holds {1, 9, 12}. After a compare-split, thread 1 holds ___.',
+      ctx: "Block-parallel odd-even sort: each of p threads first sorts its own contiguous block with qsort. Then, in each phase, paired threads do a compare-split: merge their two sorted blocks; the lower-ranked thread keeps the smaller half and the higher-ranked thread the larger half.",
+      q: "Thread 0 holds {3, 8, 10} and thread 1 holds {1, 9, 12}. After a compare-split, thread 1 holds ___.",
       options: ['{9, 10, 12}', '{1, 3, 8}', '{3, 8, 10}', '{1, 9, 12}'], answer: 0,
       why: 'Merged: 1 3 8 9 10 12. The higher rank keeps the larger half.' },
 
@@ -313,15 +317,18 @@ for (j = 0; j < N; j++)
 
     /* ---------- Heat (3) ---------- */
     { id: 'e48', topic: 'heat', kind: 'code', code: HEAT_LOOP,
-      q: 'What can go wrong now that barrier 2 has been removed?',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.\nEach thread runs the loop below, but barrier 2 has been removed.",
+      q: "What can go wrong now?",
       options: ['Threads may start the next iteration before thread 0 has swapped the grids and set converged', 'Nothing: barrier 1 is enough', 'Thread 0 deadlocks', 'thread_max_diff overflows'], answer: 0,
       why: 'A single-threaded section must be closed on both sides by barriers.' },
     { id: 'e49', topic: 'heat', kind: 'calc',
-      q: 'An interior cell\'s neighbours in cur are 8, 4, 2 and 2. Its value in next is ___.',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "An interior cell's neighbours in `cur` are 8, 4, 2 and 2. Its value in `next` is ___.",
       options: ['4.0', '16', '2.0', '3.5'], answer: 0,
       why: '0.25 × (8 + 4 + 2 + 2) = 4.0.' },
     { id: 'e50', topic: 'heat', kind: 'concept',
-      q: 'The hot block is fixed at 9 and the border at 0. At convergence the grid ___.',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "With the hot block fixed at 9 and the border at 0, once the simulation converges the grid ___.",
       options: ['forms a stable hot-to-cold gradient', 'is all 0', 'is all 9', 'oscillates between two states'], answer: 0,
       why: 'The source keeps reheating what the boundary cools, so it settles to a gradient, not a flat field.' }
   ];

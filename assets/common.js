@@ -163,7 +163,8 @@
 
   /* Question stem: text, optional code block, optional chart. */
   function stemHTML(q) {
-    let h = '<div class="q-text">' + md(q.q) + '</div>';
+    let h = q.ctx ? '<div class="q-context">' + md(q.ctx) + '</div>' : '';
+    h += '<div class="q-text">' + md(q.q) + '</div>';
     if (q.code) h += '<pre><code>' + esc(q.code) + '</code></pre>';
     if (q.chart) h += renderChart(q.chart);
     return h;

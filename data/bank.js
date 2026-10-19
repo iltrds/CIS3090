@@ -3,6 +3,33 @@
    Inline `code` and **bold** in q/options/why are rendered by assets/common.js. */
 
 (function () {
+  const HEAT_LOOP_FULL = `while (1) {
+    compute my rows of next[];           /* reads cur, writes only my rows */
+    thread_max_diff[tid] = localMax;     /* each thread has its own slot */
+    pthread_barrier_wait(&b1);           /* barrier 1 */
+    if (tid == 0) {                      /* thread 0 alone */
+        globalMax = max of thread_max_diff[];
+        swap(cur, next);
+        if (globalMax < EPSILON || iter >= MAX_ITERS - 1) converged = 1;
+        iter++;
+    }
+    pthread_barrier_wait(&b2);           /* barrier 2 */
+    if (converged) break;
+}`;
+
+  const LIST_TABLE = `Shared sorted linked list: 1,000 keys, 100,000 operations per thread.
+Run times in seconds for 1 / 2 / 4 / 8 threads.
+
+99.9% Member, 0.05% Insert, 0.05% Delete
+  read-write lock          0.213   0.123   0.098   0.115
+  one mutex for the list   0.211   0.450   0.385   0.457
+  one mutex per node       1.680   5.700   3.450   2.700
+
+80% Member, 10% Insert, 10% Delete
+  read-write lock          2.48    4.97    4.69    4.71
+  one mutex for the list   2.50    5.13    5.04    5.11
+  one mutex per node      12.00   29.60   17.00   12.00`;
+
   const CODE_A = `int count = 0;
 void* inc(void* arg) {
     for (int i = 0; i < 100000; i++) count++;
@@ -147,7 +174,8 @@ flag = (flag + 1) % thread_count;`;
       options: ['63', '32', '8', '6'], answer: 3,
       why: 'log₂ 64 = 6. A serial combine would take 63.' },
     { id: 'b14', topic: 'design', kind: 'concept',
-      q: 'In the heat simulation, Foster\'s agglomeration step turns per-cell tasks into ___.',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "Applying Foster's methodology to this simulation, the agglomeration step turns the one-task-per-cell partition into ___.",
       options: ['a band of contiguous rows per thread', 'one task per column', 'one task per cell', 'a single task for the whole grid'], answer: 0,
       why: 'One task per cell is far too fine-grained, so cells are grouped into row bands; rows are contiguous in row-major memory.' },
     { id: 'b15', topic: 'design', kind: 'concept',
@@ -167,7 +195,8 @@ flag = (flag + 1) % thread_count;`;
       options: ['1', '5', '6', '0'], answer: 0,
       why: '⌊217/6⌋ = 36 and 217 mod 6 = 1, so one TA grades 37 and five grade 36 (5·36 + 37 = 217).' },
     { id: 'b19', topic: 'design', kind: 'concept',
-      q: 'In the histogram example on a MIMD system, races on `bin_counts` are avoided by ___.',
+      ctx: "Histogram example (textbook Section 2.7): count how many of n data values fall into each of bin_count bins. p threads each take a contiguous block of data; for every element they find its bin b and increment `bin_counts[b]`.",
+      q: "On a MIMD (multicore CPU) system, the races on `bin_counts` are best avoided by ___.",
       options: ['giving each thread a private loc_bin_counts array, then summing the arrays', 'a mutex around every increment', 'atomic increments on the GPU', 'having one thread do all the counting'], answer: 0,
       why: 'Private per-thread counts avoid both races and lock overhead; a (tree) global sum combines them at the end.' },
 
@@ -215,7 +244,8 @@ flag = (flag + 1) % thread_count;`;
 
     /* ---------- Barriers & odd-even sort ---------- */
     { id: 'b30', topic: 'oddeven', kind: 'calc',
-      q: 'Block-parallel odd-even transposition sort with 4 threads on 10,000 elements needs at most ___ compare-split phases.',
+      ctx: "Block-parallel odd-even sort: each of p threads first sorts its own contiguous block with qsort. Then, in each phase, paired threads do a compare-split: merge their two sorted blocks; the lower-ranked thread keeps the smaller half and the higher-ranked thread the larger half.",
+      q: "With 4 threads sorting 10,000 elements, at most ___ compare-split phases are needed.",
       options: ['4', '2,500', '10,000', '16'], answer: 0,
       why: 'p blocks need at most p phases, just as n elements need at most n phases.' },
     { id: 'b31', topic: 'oddeven', kind: 'code', code: CODE_D,
@@ -227,11 +257,13 @@ flag = (flag + 1) % thread_count;`;
       options: ['barrier 2', 'barrier 1', 'neither', 'only both together'], answer: 0,
       why: 'Barrier 2 sits between all reads and any writes. Barrier 1 ensures last phase\'s writes are done before reading.' },
     { id: 'b33', topic: 'oddeven', kind: 'calc',
-      q: 'After one even phase of serial odd-even sort, the list 5 9 4 3 becomes ___.',
+      ctx: "Odd-even transposition sort alternates two kinds of phase.\nEven phase: compare-swap the pairs (a[0],a[1]), (a[2],a[3]), …\nOdd phase: compare-swap the pairs (a[1],a[2]), (a[3],a[4]), …",
+      q: "After one even phase, the list 5 9 4 3 becomes ___.",
       options: ['5 9 3 4', '5 4 9 3', '3 4 5 9', '9 5 4 3'], answer: 0,
       why: 'Even phase compare-swaps (a[0],a[1]) and (a[2],a[3]): (5,9) stays, (4,3) swaps.' },
     { id: 'b34', topic: 'oddeven', kind: 'concept',
-      q: 'Serial odd-even transposition sort on n elements needs at most ___ phases.',
+      ctx: "Odd-even transposition sort alternates two kinds of phase.\nEven phase: compare-swap the pairs (a[0],a[1]), (a[2],a[3]), …\nOdd phase: compare-swap the pairs (a[1],a[2]), (a[3],a[4]), …",
+      q: "On n elements, the sort needs at most ___ phases.",
       options: ['n', 'log₂ n', 'n²', 'n/2'], answer: 0,
       why: 'n phases always suffice.' },
     { id: 'b35', topic: 'oddeven', kind: 'calc',
@@ -243,7 +275,8 @@ flag = (flag + 1) % thread_count;`;
       options: ['0 and 5', 'none', '5 only', '0 only'], answer: 0,
       why: 'Odd phases pair (1,2) and (3,4); thread 0\'s partner would be −1 and thread 5\'s would be 6, both out of range.' },
     { id: 'b37', topic: 'oddeven', kind: 'calc',
-      q: 'In a compare-split, thread 1 holds 35 36 42 43 and thread 2 holds 12 21 27 49. Afterwards thread 1 holds ___.',
+      ctx: "Block-parallel odd-even sort: each of p threads first sorts its own contiguous block with qsort. Then, in each phase, paired threads do a compare-split: merge their two sorted blocks; the lower-ranked thread keeps the smaller half and the higher-ranked thread the larger half.",
+      q: "In a compare-split, thread 1 holds 35 36 42 43 and thread 2 holds 12 21 27 49. Afterwards thread 1 holds ___.",
       options: ['12 21 27 35', '36 42 43 49', '35 36 42 43', '12 21 27 49'], answer: 0,
       why: 'Merge to 12 21 27 35 36 42 43 49; the lower rank keeps the smaller half.' },
     { id: 'b38', topic: 'oddeven', kind: 'concept',
@@ -281,11 +314,13 @@ flag = (flag + 1) % thread_count;`;
       options: ['pthread_cond_wait must be called without holding m', '`if` should be `while`: after a spurious wake-up `ready` may still be 0', 'm must be unlocked before use(data)', 'pthread_cond_broadcast must be used here'], answer: 1,
       why: 'Always re-check the condition in a loop after waking.' },
     { id: 'b46', topic: 'sync', kind: 'code', code: CODE_F,
-      q: 'With 64 threads on 8 cores, this is far slower than a mutex version because ___.',
+      ctx: "Textbook π program: each thread sums its block of terms of π = 4(1 − 1/3 + 1/5 − …) into a private `my_sum`, then adds it to the shared `sum`. Below, the threads take turns using a shared `flag` (thread 0, then 1, …).",
+      q: "With 64 threads on 8 cores, this is far slower than the same program using a mutex because ___.",
       options: ['spinning threads hold cores while the thread whose turn it is may be descheduled', 'flag overflows', 'sum is private', 'mutex calls compile into spin loops'], answer: 0,
       why: 'Busy-waiting enforces a fixed turn order; with more threads than cores the next thread may not even be running.' },
     { id: 'b47', topic: 'sync', kind: 'code', code: CODE_F,
-      q: 'Compiled with -O2, this busy-wait can break unless flag (and sum) are declared ___.',
+      ctx: "Textbook π program: each thread sums its block of terms of π = 4(1 − 1/3 + 1/5 − …) into a private `my_sum`, then adds it to the shared `sum`. Below, the threads take turns using a shared `flag` (thread 0, then 1, …).",
+      q: "Compiled with -O2, this busy-wait can break unless flag (and sum) are declared ___.",
       options: ['static', 'const', 'volatile', 'extern'], answer: 2,
       why: 'The compiler does not know other threads change flag and may reorder or hoist the loads. volatile prevents that.' },
     { id: 'b48', topic: 'sync', kind: 'concept',
@@ -296,8 +331,8 @@ flag = (flag + 1) % thread_count;`;
       q: 'Which is TRUE of POSIX semaphores but not of mutexes?',
       options: ['Any thread can post (there is no owner) and they can start at any non-negative value', 'They guarantee first-come, first-served order', 'They are part of the Pthreads library itself', 'They never block'], answer: 0,
       why: 'That is why semaphores handle producer–consumer signalling. They come from semaphore.h, not Pthreads.' },
-    { id: 'b50', topic: 'sync', kind: 'concept',
-      q: 'In the textbook\'s linked-list tests, read-write locks clearly beat a single mutex when ___.',
+    { id: 'b50', topic: 'sync', kind: 'concept', code: LIST_TABLE,
+      q: "The textbook timed three ways of protecting a shared sorted linked list (table below). Read-write locks clearly beat a single mutex when ___.",
       options: ['almost all operations are Member (reads)', 'most operations are Insert and Delete', 'only one thread is used', 'every node has its own mutex'], answer: 0,
       why: 'With 99.9% Member, readers proceed concurrently. With 80% Member the two were nearly equal.' },
 
@@ -319,7 +354,7 @@ flag = (flag + 1) % thread_count;`;
       options: ['4', '8', '80', '5'], answer: 3,
       why: 'S ≤ 1/r = 1/0.2 = 5.' },
     { id: 'b55', topic: 'perf', kind: 'calc',
-      q: 'The same program (80% parallel) runs on 4 cores. Its speedup is ___.',
+      q: "A program is 80% parallelizable (that part speeds up perfectly) and 20% inherently serial. By Amdahl's law, its speedup on 4 cores is ___.",
       options: ['2.5', '3.2', '4.0', '1.6'], answer: 0,
       why: 'S = 1 / (0.2 + 0.8/4) = 1 / 0.4 = 2.5.' },
     { id: 'b56', topic: 'perf', kind: 'calc',
@@ -411,35 +446,43 @@ flag = (flag + 1) % thread_count;`;
 
     /* ---------- Heat diffusion ---------- */
     { id: 'b77', topic: 'heat', kind: 'calc',
-      q: 'An interior cell\'s neighbours in `cur` are 6 (above), 2 (below), 4 (left) and 0 (right). Its value in `next` is ___.',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "An interior cell's neighbours in `cur` are 6 (above), 2 (below), 4 (left) and 0 (right). Its value in `next` is ___.",
       options: ['3.0', '4.0', '12', '2.4'], answer: 0,
       why: '0.25 × (6 + 2 + 4 + 0) = 3.0.' },
     { id: 'b78', topic: 'heat', kind: 'concept',
-      q: 'Why does the heat simulation keep two grids, `cur` and `next`?',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "Why does the simulation keep two grids, `cur` and `next`?",
       options: ['So every update reads only step-t values, making the traversal order irrelevant', 'To halve memory use', 'So two threads can share one grid', 'To store the boundary separately'], answer: 0,
       why: 'Double (ping-pong) buffering: cur is read-only and next write-only within a step; swap at the end.' },
     { id: 'b79', topic: 'heat', kind: 'concept',
-      q: 'The heat simulation stops when ___.',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "The simulation stops when ___.",
       options: ['the largest per-cell change drops below epsilon, or the iteration cap is reached', 'every cell reaches 0', 'every cell equals the hot value', 'p iterations have run'], answer: 0,
       why: 'Convergence (max_diff < ε) or the cap, whichever comes first.' },
     { id: 'b80', topic: 'heat', kind: 'concept',
-      q: 'Why are threads given bands of rows rather than columns?',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "Why are threads given bands of rows rather than bands of columns?",
       options: ['C arrays are row-major, so rows are contiguous in memory and cache-friendly', 'Columns cannot be divided evenly', 'Rows contain fewer cells', 'The hot block is horizontal'], answer: 0,
       why: 'Contiguous rows give spatial locality.' },
     { id: 'b81', topic: 'heat', kind: 'calc',
-      q: 'A 12×12 grid\'s updatable rows 1–10 are split over 3 threads (⌊rows/p⌋, first threads get the remainder). Thread 0 gets rows ___.',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "A 12×12 grid has fixed border rows 0 and 11, so rows 1–10 are updated. They're split over 3 threads: each gets ⌊rows/p⌋ and the first (rows mod p) threads get one extra. Thread 0 gets rows ___.",
       options: ['1–4', '1–3', '0–3', '1–5'], answer: 0,
       why: '⌊10/3⌋ = 3, remainder 1: thread 0 gets 4 rows (1–4), then 5–7 and 8–10.' },
-    { id: 'b82', topic: 'heat', kind: 'concept',
-      q: 'Why does writing `thread_max_diff[tid]` need no mutex?',
+    { id: 'b82', topic: 'heat', kind: 'code', code: HEAT_LOOP_FULL,
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.\nEach thread runs the loop below.",
+      q: "Why does writing `thread_max_diff[tid]` need no mutex?",
       options: ['Each thread writes only its own slot, and barrier 1 orders those writes before thread 0 reads them', 'The array is volatile', 'Doubles are written atomically', 'Thread 0 locks the array'], answer: 0,
       why: 'Disjoint writes plus barriers make the code race-free without locks.' },
-    { id: 'b83', topic: 'heat', kind: 'concept',
-      q: 'Barrier 1 in the heat loop guarantees that ___.',
+    { id: 'b83', topic: 'heat', kind: 'code', code: HEAT_LOOP_FULL,
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.\nEach thread runs the loop below.",
+      q: "Barrier 1 guarantees that ___.",
       options: ['every thread has finished writing next[] and its max_diff before thread 0 reads them', 'thread 0 has swapped the grids', 'converged has been set', 'all threads start the program together'], answer: 0,
       why: 'Barrier 2 is the one that makes thread 0\'s swap and converged flag visible to everyone.' },
     { id: 'b84', topic: 'heat', kind: 'concept',
-      q: 'Running the simulation with 1, 4 and 7 threads gives different frames. The most likely cause is ___.',
+      ctx: "Heat diffusion case study (Lecture 8): a 2D grid models a metal plate. The outer border is fixed at 0 (cold) and a centred block is fixed hot. Every iteration, each other cell becomes the average of its four neighbours from the previous iteration:\n`next[i][j] = 0.25 * (cur[i-1][j] + cur[i+1][j] + cur[i][j-1] + cur[i][j+1])`\nPthreads version: each thread updates its own band of rows.",
+      q: "Running the simulation with 1, 4 and 7 threads gives different frames. The most likely cause is ___.",
       options: ['a missing or misplaced barrier', 'rounding differences in the physics', 'too few iterations', 'the hot block size'], answer: 0,
       why: 'Because any traversal order gives bit-identical results, frames must match for every thread count. A sync bug often shows as seams at band edges.' }
   ];

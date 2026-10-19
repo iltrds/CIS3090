@@ -219,6 +219,11 @@ select { font: inherit; padding: 6px 8px; border-radius: var(--radius-s); border
 /* ---------- Questions (quiz + exam) ---------- */
 .qcard { max-width: 780px; }
 .q-meta { color: var(--ink-2); font-size: 0.92rem; margin-bottom: 8px; display: flex; gap: 14px; flex-wrap: wrap; }
+.q-context {
+  white-space: pre-line; font-size: 0.97rem; color: var(--ink); background: var(--accent-soft);
+  border-left: 3px solid var(--accent); border-radius: 0 var(--radius-s) var(--radius-s) 0;
+  padding: 10px 14px; margin: 0 0 12px; line-height: 1.5;
+}
 .q-text { font-size: 1.15rem; font-weight: 700; margin-bottom: 12px; line-height: 1.4; }
 .q-text code { font-weight: 400; }
 .options { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; }
@@ -396,3 +401,6 @@ select { font: inherit; padding: 6px 8px; border-radius: var(--radius-s); border
   .reading { display: block; }
   body { background: #fff; color: #000; }
 }
+.ex pre { margin: 6px 0 10px; font-size: 13px; }
+.ex details.ctx-fold summary { color: var(--ink-2); font-weight: 600; font-size: 14px; }
+.ex details.ctx-fold { margin: 2px 0 8px; }

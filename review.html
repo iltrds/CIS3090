@@ -42,7 +42,13 @@
 
 <div class="ex" data-ex="1.1">
 <div class="ex-head"><span class="ex-num">1.1</span><span class="ex-topic">Partition formulas when n isn't divisible by p</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Write formulas for <code>my_first_i</code> and <code>my_last_i</code> so each of p cores gets roughly n/p of the loop. Start with p dividing n.</p>
+<p class="ex-prompt">Each of p cores runs this loop over its share of n iterations:</p>
+<pre><code>my_sum = 0;
+for (my_i = my_first_i; my_i &lt; my_last_i; my_i++) {
+    my_x = Compute_next_value(...);
+    my_sum += my_x;
+}</code></pre>
+<p class="ex-prompt">Write formulas for <code>my_first_i</code> and <code>my_last_i</code> so every core gets roughly n/p iterations. Start with the case where p divides n.</p>
 <details><summary>Show worked solution</summary>
 <p>If p divides n, every core gets n/p: <code>my_first_i = my_rank * n/p</code> and <code>my_last_i = my_first_i + n/p</code> (exclusive). Otherwise let q = ⌊n/p⌋ and r = n mod p; the first r cores take one extra.</p>
 <pre><code>q = n / p;  r = n % p;
@@ -55,7 +61,7 @@ my_last_i = my_first_i + my_count;          /* exclusive */</code></pre>
 
 <div class="ex" data-ex="1.2">
 <div class="ex-head"><span class="ex-num">1.2</span><span class="ex-topic">Partitioning when work per iteration isn't uniform</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Redo 1.1 when call i costs i + 1 times as much as call 0, or when the calls take 2, 4, 6, … ms.</p>
+<p class="ex-prompt">Same setup as 1.1 (n calls to <code>Compute_next_value</code> split over p cores), but the calls don't cost the same. How would you change the assignment if call i = k takes k + 1 times as long as call 0? What if call 0 takes 2 ms, call 1 takes 4 ms, call 2 takes 6 ms, and so on?</p>
 <details><summary>Show worked solution</summary>
 <p>Both versions have the same shape (the second is just doubled). Equal-sized contiguous blocks are badly unbalanced: the last core gets the most expensive calls. Example with n = 24 and p = 8, three calls each; the total is 300 units, so the ideal is 37.5 per core.</p>
 <div class="table-wrap"><table>
@@ -71,7 +77,7 @@ my_last_i = my_first_i + my_count;          /* exclusive */</code></pre>
 
 <div class="ex" data-ex="1.6">
 <div class="ex-head"><span class="ex-num">1.6</span><span class="ex-topic">Receives and additions for core 0</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Give formulas for core 0's receives and additions in the original and the tree-structured global sum, and tabulate them for 2, 4, 8, …, 1024 cores.</p>
+<p class="ex-prompt">Two ways to combine p partial sums. <strong>Original:</strong> core 0 receives each other core's partial sum, one at a time, and adds it. <strong>Tree-structured:</strong> cores pair up in rounds — 0←1, 2←3, 4←5, …; then 0←2, 4←6, …; and so on until core 0 holds the total. Derive formulas for the number of receives and additions core 0 performs with each, and tabulate them for 2, 4, 8, …, 1024 cores.</p>
 <details><summary>Show worked solution</summary>
 <p>Original: p − 1 receives and p − 1 additions. Tree: log₂ p of each.</p>
 <div class="table-wrap"><table>
@@ -85,7 +91,7 @@ my_last_i = my_first_i + my_count;          /* exclusive */</code></pre>
 
 <div class="ex" data-ex="1.7">
 <div class="ex-head"><span class="ex-num">1.7</span><span class="ex-topic">Data vs task parallelism in the tree-structured sum</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Is the tree-structured combine of the partial sums data parallelism or task parallelism? Why?</p>
+<p class="ex-prompt">In the global sum, the first part (each core adds up its own computed values) is data parallelism. In the original second part, the other cores send their partial sums to a master core, which adds them: the master and the others do different jobs, so it's task parallelism. What about the tree-structured second part, where cores pair up in rounds and one of each pair sends while the other receives and adds? Data or task parallelism? Why?</p>
 <details><summary>Show worked solution</summary>
 <p><strong>Both.</strong> In each stage every receiving core does the same thing (receive a partial sum, add it) on different data: data parallelism. But in the same stage some cores send while others receive and add: different tasks, so task parallelism. The textbook called the original master-core combine task-parallel for exactly that reason.</p>
 </details>
@@ -93,7 +99,7 @@ my_last_i = my_first_i + my_count;          /* exclusive */</code></pre>
 
 <div class="ex" data-ex="1.8">
 <div class="ex-head"><span class="ex-num">1.8</span><span class="ex-topic">Task and data parallelism, and combining them</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Faculty are throwing a party: use task parallelism to prepare, data parallelism to clean the house, then combine the two.</p>
+<p class="ex-prompt">Faculty members are throwing a party for the students. (a) Identify tasks that different faculty can do at the same time (task parallelism) and work out a schedule. (b) One task is cleaning the house: how can data parallelism split it among the faculty? (c) Combine task and data parallelism to prepare for the party; TAs can pick up the slack.</p>
 <details><summary>Show worked solution</summary>
 <ul>
 <li><strong>Task parallelism</strong>: give each person a different job — shopping, cooking, cleaning, decorating, music. Schedule around dependencies: shop before cooking, clean before decorating, everything before the guests arrive. Independent jobs run at the same time.</li>
@@ -105,7 +111,7 @@ my_last_i = my_first_i + my_count;          /* exclusive */</code></pre>
 
 <div class="ex optional" data-ex="1.3">
 <div class="ex-head"><span class="ex-num">1.3, 1.5</span><span class="ex-topic">Optional: tree-sum pseudocode, any number of cores</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Write pseudocode for the tree-structured global sum using <code>divisor</code> and <code>core_difference</code>, then make it work when p isn't a power of two.</p>
+<p class="ex-prompt">Write pseudocode for the tree-structured global sum (pairs combine in rounds: 0←1, 2←3, …; then 0←2, 4←6, …), assuming p is a power of two. Hints from the textbook: a variable <code>divisor</code> starts at 2 and doubles each round; a core whose rank is divisible by <code>divisor</code> receives and adds, otherwise it sends. A variable <code>core_difference</code> starts at 1 and doubles each round; it gives the partner's rank. Then (1.5) make it work for any p, such as 3, 5, 6 or 7.</p>
 <details><summary>Show worked solution</summary>
 <pre><code>sum = my_sum;  divisor = 2;  core_difference = 1;
 while (core_difference &lt; p) {
@@ -133,7 +139,7 @@ while (core_difference &lt; p) {
 
 <div class="ex" data-ex="2.22">
 <div class="ex-head"><span class="ex-num">2.22</span><span class="ex-topic">Foster's method on vector addition</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Apply the four steps of Foster's methodology to adding two vectors.</p>
+<p class="ex-prompt">Apply Foster's methodology — partitioning, communication, agglomeration, mapping — to vector addition: z[i] = x[i] + y[i] for i = 0 … n − 1. What are the tasks, the communication between them, the aggregate tasks, and the mapping to threads or processes?</p>
 <details><summary>Show worked solution</summary>
 <ol>
 <li><strong>Partitioning</strong>: one task per element, computing x[i] + y[i]. Nothing is inherently serial.</li>
@@ -146,7 +152,7 @@ while (core_difference &lt; p) {
 
 <div class="ex" data-ex="2.23">
 <div class="ex-head"><span class="ex-num">2.23</span><span class="ex-topic">Two decompositions of the histogram, and which scales better</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Instead of splitting the data, make each aggregate task own a set of bins. Design it, and say which design is more scalable.</p>
+<p class="ex-prompt">The histogram problem: count how many of n data values fall into each of bin_count bins. The textbook's design splits the <em>data</em>: each thread finds the bin of every element in its block and counts it in a private <code>loc_bin_counts</code> array; the arrays are then added with a tree-structured sum. Alternative: make each aggregate task all the increments of particular bins. Each thread owns a set of bins and, for every element of data, checks whether it falls in one of its bins. Assuming the data is already distributed and initialized, design a program this way. Which of the two designs is more scalable?</p>
 <details><summary>Show worked solution</summary>
 <p>Each thread owns a range of bins and scans <em>all</em> of data, counting only elements that land in its bins:</p>
 <pre><code>/* thread my_rank owns bins my_first_bin .. my_last_bin */
@@ -161,7 +167,7 @@ for (i = 0; i &lt; data_count; i++) {
 
 <div class="ex" data-ex="2.24">
 <div class="ex-head"><span class="ex-num">2.24</span><span class="ex-topic">Shared memory: tree-structured sum, shared vs private variables</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Write the tree-structured sum of the threads' <code>loc_bin_cts</code> arrays for shared memory. Which variables are shared and which are private?</p>
+<p class="ex-prompt">In the histogram program each thread ends with its own array of bin counts, <code>loc_bin_cts</code>. Write pseudocode for a tree-structured global sum that adds these arrays — like the global sum of single values, pairs combine in rounds until thread 0 holds the totals. Do the shared-memory version: which variables are shared and which are private?</p>
 <details><summary>Show worked solution</summary>
 <pre><code>/* shared:  loc_bin_cts[thread_count][bin_count], bin_count, thread_count, barrier */
 /* private: my_rank, divisor, diff, partner, b                                     */
@@ -193,7 +199,16 @@ while (diff &lt; thread_count) {
 
 <div class="ex" data-ex="4.4">
 <div class="ex-head"><span class="ex-num">4.4</span><span class="ex-topic">Why mutex performance stops changing beyond the number of cores</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">The mutex π program's run time stays roughly constant once threads outnumber CPUs. What does that say about how threads are scheduled?</p>
+<p class="ex-prompt">Textbook π program: each thread sums its block of terms of π = 4(1 − 1/3 + 1/5 − …) into a private <code>my_sum</code>, then adds it once to the shared <code>sum</code>, protecting that update either with a busy-wait flag or with a mutex. Run times (Table 4.1, 10⁸ terms, 8 cores):</p>
+<pre><code>threads    busy-wait    mutex
+   1         2.90 s     2.90 s
+   2         1.45       1.45
+   4         0.73       0.73
+   8         0.38       0.38
+  16         0.50       0.38
+  32         0.80       0.40
+  64         3.56       0.38</code></pre>
+<p class="ex-prompt">The mutex version's run time stays roughly constant once there are more threads than cores. What does this suggest about how the threads are scheduled on the processors?</p>
 <details><summary>Show worked solution</summary>
 <p>A thread waiting for a mutex <strong>blocks</strong>: the OS takes it off the core and runs a thread that can do useful work. So no more threads than there are cores ever run at once, extra threads just wait their turn, and the total work stays the same, so the run time stays at the value set by the core count. Busy-waiting threads keep spinning on cores instead, which is why that version degrades. Table 4.1: the mutex version stays at 0.38–0.40 s from 8 to 64 threads on 8 cores.</p>
 </details>
@@ -201,7 +216,24 @@ while (diff &lt; thread_count) {
 
 <div class="ex" data-ex="4.5">
 <div class="ex-head"><span class="ex-num">4.5</span><span class="ex-topic">Critical section inside vs outside the loop</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Put the mutex-protected update inside the loop and compare. The prof suggests reasoning with counter1.c and counter2.c.</p>
+<p class="ex-prompt">Move the critical section of the mutex π program inside its <code>for</code> loop (lock, add one term to <code>sum</code>, unlock — every iteration). How does it compare with the book's original busy-wait version, which also had its critical section inside the loop?</p>
+<pre><code>/* book's busy-wait version */
+for (i = my_first_i; i &lt; my_last_i; i++, factor = -factor) {
+    while (flag != my_rank);
+    sum += factor / (2*i + 1);
+    flag = (flag + 1) % thread_count;
+}</code></pre>
+<p class="ex-prompt">The prof suggests reasoning with the Lecture 5 counters instead, where two threads each increment a shared <code>count</code> 1,000,000 times:</p>
+<pre><code>/* counter1.c: no lock */
+for (i = 0; i &lt; 1000000; i++)
+    count++;
+
+/* counter2.c: lock inside the loop */
+for (i = 0; i &lt; 1000000; i++) {
+    pthread_mutex_lock(&amp;m);
+    count++;
+    pthread_mutex_unlock(&amp;m);
+}</code></pre>
 <details><summary>Show worked solution</summary>
 <p>counter2.c locks around every <code>count++</code>. It's correct, but the critical section runs once per iteration, so the increments are fully serialized, every lock and unlock costs time, and the mutex and <code>count</code> bounce between the cores' caches. Counting into a private local and locking once after the loop is just as correct, with only p critical-section entries.</p>
 <div class="table-wrap"><table>
@@ -218,7 +250,16 @@ while (diff &lt; thread_count) {
 
 <div class="ex" data-ex="4.7">
 <div class="ex-head"><span class="ex-num">4.7</span><span class="ex-topic">Creating threads until it fails, and what detaching changes</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Call pthread_create in an infinite loop. Why do the messages eventually stop? What changes if each thread is detached?</p>
+<p class="ex-prompt">Change the Pthreads hello program so main creates threads in an infinite loop and never joins them:</p>
+<pre><code>void* Hello(void* rank) {
+    printf("Hello from thread %ld\n", (long) rank);
+    return NULL;
+}
+/* in main */
+pthread_t handle;
+for (long thread = 0; ; thread++)
+    pthread_create(&amp;handle, NULL, Hello, (void*) thread);</code></pre>
+<p class="ex-prompt">The "Hello from thread" messages eventually stop, though the program keeps running. Why? (Check what <code>pthread_create</code> returns.) Then call <code>pthread_detach(handle)</code> after each create: what changes?</p>
 <details><summary>Show worked solution</summary>
 <p>The messages stop because <code>pthread_create</code> starts returning an error: <strong>EAGAIN</strong>, "Resource temporarily unavailable". The threads are joinable and never joined, so each finished thread keeps its resources (stack, thread record) until somebody joins it, and the system runs out. A detached thread frees its resources as soon as it finishes, so creation keeps succeeding; only the number alive at the same moment is limited.</p>
 <p>On the test machine the joinable version failed after 32,753 threads; the detached version created 200,000 with no failure and was stopped there.</p>
@@ -227,7 +268,24 @@ while (diff &lt; thread_count) {
 
 <div class="ex" data-ex="4.8">
 <div class="ex-head"><span class="ex-num">4.8</span><span class="ex-topic">Producer–consumer with a mutex and a flag</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Implement producer–consumer with one mutex and a <code>message_available</code> flag. Generalize so each thread q sends to (q + 1) mod t and receives from (q − 1 + t) mod t. Does it busy-wait?</p>
+<p class="ex-prompt">Producer–consumer with a mutex instead of semaphores. The two threads share a mutex and a flag <code>message_available</code>, initialized to false, and each runs:</p>
+<pre><code>while (1) {
+    pthread_mutex_lock(&amp;mutex);
+    if (my_rank == consumer) {
+        if (message_available) {
+            print message;
+            pthread_mutex_unlock(&amp;mutex);
+            break;
+        }
+    } else {                       /* my_rank == producer */
+        create message;
+        message_available = 1;
+        pthread_mutex_unlock(&amp;mutex);
+        break;
+    }
+    pthread_mutex_unlock(&amp;mutex);
+}</code></pre>
+<p class="ex-prompt">Write this for two threads. Generalize it to 2k threads (odd ranks consume, even ranks produce), then so every thread is both: thread q sends to (q + 1) mod t and receives from (q − 1 + t) mod t. Does it use busy-waiting?</p>
 <details><summary>Show worked solution</summary>
 <p>With two threads the consumer loops lock, check the flag, unlock, until the producer sets it. For the ring, give each thread its own message slot, flag and mutex:</p>
 <pre><code>/* shared: msg[t], available[t] (all 0), m[t]; dest = (my_rank + 1) % t */
@@ -250,7 +308,11 @@ while (1) {                                        /* consume */
 
 <div class="ex" data-ex="4.9">
 <div class="ex-head"><span class="ex-num">4.9</span><span class="ex-topic">Deadlock with two mutexes</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">At time 0 thread 0 locks mut0 and thread 1 locks mut1; at time 1 each locks the other. What happens? Would busy-waiting with two flags, or semaphores, avoid it?</p>
+<p class="ex-prompt">A program has two shared data structures, each protected by its own mutex (mut0 and mut1); a structure may be accessed only while holding its mutex. Two threads do this:</p>
+<pre><code>time   thread 0                      thread 1
+ 0     pthread_mutex_lock(&amp;mut0);    pthread_mutex_lock(&amp;mut1);
+ 1     pthread_mutex_lock(&amp;mut1);    pthread_mutex_lock(&amp;mut0);</code></pre>
+<p class="ex-prompt">(a) What happens? (b) Would it still be a problem with busy-waiting on two flag variables instead of mutexes? (c) With semaphores instead of mutexes?</p>
 <details><summary>Show worked solution</summary>
 <ul>
 <li>(a) Each thread holds one mutex and asks for the one the other holds, so both block forever: <strong>deadlock</strong>. Run as written, the program was still stuck after 3 s.</li>
@@ -263,7 +325,7 @@ while (1) {                                        /* consume */
 
 <div class="ex" data-ex="4.12">
 <div class="ex-head"><span class="ex-num">4.12</span><span class="ex-topic">Races between linked-list operations</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Give a list and an interleaving where each pair causes a problem: two Deletes, Insert + Delete, Member + Delete, two Inserts, Insert + Member.</p>
+<p class="ex-prompt">A shared, sorted, singly-linked list of ints has three operations with no locking: <code>Member(value)</code> walks the list looking for value; <code>Insert(value)</code> walks to find <code>pred</code> and <code>curr</code>, then links a new node between them; <code>Delete(value)</code> finds the node, sets <code>pred-&gt;next</code> to its successor and frees it. Give a list and a sequence of memory accesses where each pair, run at the same time, causes a problem: (a) two Deletes, (b) an Insert and a Delete, (c) a Member and a Delete, (d) two Inserts, (e) an Insert and a Member.</p>
 <details><summary>Show worked solution</summary>
 <p>The list is 2 → 5 → 8; each row is one bad interleaving.</p>
 <div class="table-wrap"><table>
@@ -280,7 +342,7 @@ while (1) {                                        /* consume */
 
 <div class="ex" data-ex="4.13">
 <div class="ex-head"><span class="ex-num">4.13</span><span class="ex-topic">Read lock for the search phase, write lock for the update phase</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Insert and Delete first search (read-only), then modify. Is it safe to hold a read lock for the search, then a write lock for the update?</p>
+<p class="ex-prompt">Insert and Delete on a shared linked list have two phases: first a search for the position, which only reads the list, then (if needed) the insertion or deletion, which writes it. Programs often split these into two function calls. Would it be safe to hold a read lock for the first phase, then a write lock for the second? Explain.</p>
 <details><summary>Show worked solution</summary>
 <p><strong>No.</strong> Between releasing the read lock and getting the write lock, another thread can change the list: it can delete the pred or curr node you found (you then link into freed memory) or insert the same key (you then insert a duplicate). The position found in phase 1 can be stale by phase 2. Pthreads read-write locks can't be upgraded atomically either; asking for the write lock while still holding the read lock may deadlock or return an error. Hold the write lock for the whole Insert or Delete, or re-check the position after taking it.</p>
 </details>
@@ -288,7 +350,21 @@ while (1) {                                        /* consume */
 
 <div class="ex" data-ex="4.17">
 <div class="ex-head"><span class="ex-num">4.17</span><span class="ex-topic">False sharing between non-adjacent threads</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">8000 × 8000 matrix-vector multiply, 4 threads, 64-byte lines. Can threads 0 and 2 (or 0 and 3) falsely share part of y if they're on different processors?</p>
+<p class="ex-prompt">Matrix-vector multiply, run with m = n = 8000 and 4 threads (so each thread computes 2000 consecutive elements of y):</p>
+<pre><code>/* Program 4.13: y = A*x, A is m x n; m, n, A, x, y are shared */
+void* Pth_mat_vect(void* rank) {
+    long my_rank = (long) rank;
+    int local_m = m / thread_count;
+    int my_first_row = my_rank * local_m;
+    int my_last_row  = (my_rank + 1) * local_m - 1;
+    for (int i = my_first_row; i &lt;= my_last_row; i++) {
+        y[i] = 0.0;
+        for (int j = 0; j &lt; n; j++)
+            y[i] += A[i][j] * x[j];
+    }
+    return NULL;
+}</code></pre>
+<p class="ex-prompt">A cache line holds 64 bytes, or 8 doubles. If threads 0 and 2 run on different processors, can false sharing between them occur for any part of y? Why? What about threads 0 and 3?</p>
 <details><summary>Show worked solution</summary>
 <p>Thread 0 computes y[0..1999], thread 1 y[2000..3999], thread 2 y[4000..5999] and thread 3 y[6000..7999]. A line holds 8 consecutive doubles. Thread 0's last element, y[1999], is 2001 elements from thread 2's first, y[4000] (and 4001 from thread 3's), so no line can hold elements of both. <strong>False sharing between 0 and 2, or 0 and 3, is impossible</strong>, whichever processors they're on. It can only happen at the boundary between adjacent threads (0–1, 1–2, 2–3), and even there it's unlikely: one thread touches the boundary at the end of its loop and the other at the start.</p>
 </details>
@@ -296,7 +372,19 @@ while (1) {                                        /* consume */
 
 <div class="ex" data-ex="4.18">
 <div class="ex-head"><span class="ex-num">4.18</span><span class="ex-topic">Parts a, b and e: y in the 8 × 8,000,000 multiply</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">y has 8 doubles, lines are 64 bytes, and the machine has two dual-core processors. (a) Minimum lines for y? (b) Maximum? (e) Can threads and lines be arranged so there's no false sharing?</p>
+<p class="ex-prompt">The same matrix-vector program with an 8 × 8,000,000 matrix, so y has 8 doubles of 8 bytes each and each of 4 threads computes 2 elements of y. A cache line is 64 bytes, and the machine has two dual-core processors (the two cores on a processor share a cache). (a) What is the minimum number of cache lines needed to store y? (b) The maximum? (e) Is there an assignment of y's elements to cache lines, and of threads to processors, with no false sharing — the threads on one processor having their elements of y in one line and the threads on the other processor in a different line?</p><details class="ctx-fold"><summary>Show Program 4.13</summary><pre><code>/* Program 4.13: y = A*x, A is m x n; m, n, A, x, y are shared */
+void* Pth_mat_vect(void* rank) {
+    long my_rank = (long) rank;
+    int local_m = m / thread_count;
+    int my_first_row = my_rank * local_m;
+    int my_last_row  = (my_rank + 1) * local_m - 1;
+    for (int i = my_first_row; i &lt;= my_last_row; i++) {
+        y[i] = 0.0;
+        for (int j = 0; j &lt; n; j++)
+            y[i] += A[i][j] * x[j];
+    }
+    return NULL;
+}</code></pre></details>
 <details><summary>Show worked solution</summary>
 <ul>
 <li>(a) <strong>1 line</strong>, when y[0] starts a cache line.</li>
@@ -308,7 +396,19 @@ while (1) {                                        /* consume */
 
 <div class="ex" data-ex="4.19">
 <div class="ex-head"><span class="ex-num">4.19</span><span class="ex-topic">Parts a and b: padding vs thread-private storage</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Fix the false sharing on y (a) by padding y and (b) by giving each thread private storage for its part of y.</p>
+<p class="ex-prompt">In that 8 × 8,000,000 run, each thread updates its two elements of y 8,000,000 times, and all of y can sit in one cache line, so the line keeps bouncing between processors (false sharing). Fix it two ways: (a) pad y so that, even with the threads running in lock-step, no cache line holding an element of y is shared by two threads — with 8 doubles per line and 4 threads, allocating at least 48 doubles is enough; (b) give each thread private storage for its part of y during the loop and copy it into the shared y when it's done. How do the two compare?</p><details class="ctx-fold"><summary>Show Program 4.13</summary><pre><code>/* Program 4.13: y = A*x, A is m x n; m, n, A, x, y are shared */
+void* Pth_mat_vect(void* rank) {
+    long my_rank = (long) rank;
+    int local_m = m / thread_count;
+    int my_first_row = my_rank * local_m;
+    int my_last_row  = (my_rank + 1) * local_m - 1;
+    for (int i = my_first_row; i &lt;= my_last_row; i++) {
+        y[i] = 0.0;
+        for (int j = 0; j &lt; n; j++)
+            y[i] += A[i][j] * x[j];
+    }
+    return NULL;
+}</code></pre></details>
 <details><summary>Show worked solution</summary>
 <ul>
 <li>(a) <strong>Padding</strong>: spread y so no cache line ever holds elements of two threads, whatever the alignment. With 4 threads and 8 doubles per line, allocate 48 doubles and let thread t use y[8 + 10t] and y[9 + 10t]: neighbouring threads' elements are 9 apart and the ends are padded, which was checked for all 8 alignments. It costs memory and makes indexing awkward.</li>
@@ -320,7 +420,19 @@ while (1) {                                        /* consume */
 
 <div class="ex optional" data-ex="4.16">
 <div class="ex-head"><span class="ex-num">4.16</span><span class="ex-topic">Optional: cache profiling with Valgrind</span><label class="ex-done"><input type="checkbox"> Done</label></div>
-<p class="ex-prompt">Profile the matrix-vector program with inputs k × (k·10⁶), (k·10³) × (k·10³) and (k·10⁶) × k. Where do the read- and write-misses happen, and which input is fastest?</p>
+<p class="ex-prompt">Profile the matrix-vector program with a cache profiler such as Valgrind (compile with a symbol table and full optimization, <code>gcc -g -O2</code>), using inputs k × (k·10⁶), (k·10³) × (k·10³) and (k·10⁶) × k, with k large enough that one input has around 10⁶ level-2 misses. For each input: how many level 1 and level 2 write- and read-misses are there, and where do most happen? Without the profiler, which input runs fastest and slowest, and do the misses explain it?</p><details class="ctx-fold"><summary>Show Program 4.13</summary><pre><code>/* Program 4.13: y = A*x, A is m x n; m, n, A, x, y are shared */
+void* Pth_mat_vect(void* rank) {
+    long my_rank = (long) rank;
+    int local_m = m / thread_count;
+    int my_first_row = my_rank * local_m;
+    int my_last_row  = (my_rank + 1) * local_m - 1;
+    for (int i = my_first_row; i &lt;= my_last_row; i++) {
+        y[i] = 0.0;
+        for (int j = 0; j &lt; n; j++)
+            y[i] += A[i][j] * x[j];
+    }
+    return NULL;
+}</code></pre></details>
 <details><summary>Show worked solution</summary>
 <p>Compile with <code>gcc -g -O2</code>, run <code>valgrind --tool=cachegrind ./prog</code>, then read the counts with <code>cg_annotate</code>. Expected pattern (Section 4.10):</p>
 <ul>

@@ -19,7 +19,7 @@ window.FLASHCARDS = [
   { topic: 'design', front: 'Communication (Foster)', back: 'Determine what data must move between tasks; start from what each task needs to know.' },
   { topic: 'design', front: 'Agglomeration', back: 'Combine fine-grained tasks into larger ones (e.g. if A must precede B, merge them) to cut overhead and communication.' },
   { topic: 'design', front: 'Mapping', back: 'Assign composite tasks to threads/processes so work is balanced and communication is minimized.' },
-  { topic: 'design', front: 'Lecture\'s work-split formula', back: 'q = ⌊n/p⌋, r = n mod p. count = q + (rank < r). first = rank·q + min(rank, r).' },
+  { topic: 'design', front: 'Formula for splitting n items over p threads as evenly as possible', back: 'q = ⌊n/p⌋, r = n mod p. count = q + (rank < r). first = rank·q + min(rank, r).' },
   { topic: 'design', front: 'Reduction', back: 'Repeatedly applying a binary operator (+, ×, max) to a sequence to get one value, kept in a reduction variable.' },
   { topic: 'design', front: 'Serial vs tree reduction on p cores', back: 'Serial: p − 1 steps on core 0, O(p). Tree: ⌈log₂ p⌉ steps, O(log p). Both do p − 1 additions in total.' },
   { topic: 'design', front: 'Parallel sum run time', back: 'O(n/p) + O(log p). Assumes communication is nearly free — always check that assumption.' },
@@ -61,7 +61,7 @@ window.FLASHCARDS = [
   { topic: 'sync', front: 'Critical section', back: 'Code where a race can occur; only one thread should execute it at a time (mutual exclusion). Keep it short and rare.' },
   { topic: 'sync', front: 'Mutex calls', back: '`pthread_mutex_init(&m, NULL)`, `pthread_mutex_lock`, `pthread_mutex_unlock`, `pthread_mutex_destroy`; or `PTHREAD_MUTEX_INITIALIZER`.' },
   { topic: 'sync', front: 'Busy-waiting', back: 'Spinning in a loop testing a flag. Wastes a core, breaks under compiler reordering (use volatile), collapses with more threads than cores.' },
-  { topic: 'sync', front: 'π example lesson', back: 'Accumulate into a private my_sum and enter the critical section once after the loop, not once per term.' },
+  { topic: 'sync', front: 'Threads each add many terms of the π series into a shared `sum`. Where should the critical section go?', back: 'Accumulate into a private my_sum and enter the critical section once after the loop, not once per term.' },
   { topic: 'sync', front: 'Semaphore', back: 'Unsigned counter. `sem_wait` decrements or blocks at 0; `sem_post` increments. No owner. In semaphore.h, not Pthreads.' },
   { topic: 'sync', front: 'Producer–consumer synchronization', back: 'A consumer waits until a producer has done something. Semaphore initialized to 0: producer posts, consumer waits.' },
   { topic: 'sync', front: 'Condition variable', back: 'Lets a thread sleep until signalled. Always used with a mutex: `while (!cond) pthread_cond_wait(&c, &m);`' },
@@ -72,7 +72,7 @@ window.FLASHCARDS = [
   { topic: 'sync', front: 'Thread-safe function', back: 'Works correctly when called by several threads at once. strtok, rand and localtime are not (static state); use strtok_r.' },
   { topic: 'sync', front: '"Incorrect programs can produce correct output"', back: 'Races are timing-dependent; one correct run proves nothing.' },
   { topic: 'sync', front: 'Valgrind for threads', back: '`valgrind --fair-sched=yes` for leaks; `--tool=drd --fair-sched=yes` for races. Run them separately; DRD hides leak output.' },
-  { topic: 'sync', front: 'Why counter1.c prints 2,000,000 under valgrind', back: 'Valgrind runs one thread at a time, so increments never truly interleave — but DRD still reports the race.' },
+  { topic: 'sync', front: 'counter1.c: two threads each run `count++` 1,000,000 times on a shared count with no lock. Why does it print the correct 2,000,000 under valgrind, while DRD still reports a race?', back: 'Valgrind runs one thread at a time, so increments never truly interleave — but DRD still reports the race.' },
   { topic: 'sync', front: 'gprof', back: 'Compile with `-pg`, run, then `gprof` for a function-level profile (found the busy-waiting getMessage).' },
 
   /* Perf */
@@ -97,7 +97,7 @@ window.FLASHCARDS = [
   { topic: 'hw', front: 'Write-through vs write-back', back: 'Write-through updates memory on every write. Write-back marks the line dirty and writes it on eviction.' },
   { topic: 'hw', front: 'Cache mappings', back: 'Fully associative: any slot. Direct-mapped: slot = line mod slots. n-way set associative: one of n slots in a set. Evict LRU.' },
   { topic: 'hw', front: 'Row-major order', back: 'C stores A[i][j] row after row. Loop i outer, j inner to walk memory contiguously.' },
-  { topic: 'hw', front: 'Cache-friendly data (lecture)', back: 'Structs not objects, no pointers in structs, contiguous arrays not linked lists, 2D as 1D with index math.' },
+  { topic: 'hw', front: 'Rules for cache-friendly data layouts', back: 'Structs not objects, no pointers in structs, contiguous arrays not linked lists, 2D as 1D with index math.' },
   { topic: 'hw', front: 'Virtual memory, page, TLB', back: 'Memory caches disk; blocks are pages (4–16 KB). Page table maps virtual → physical; the TLB caches translations; missing page = page fault.' },
   { topic: 'hw', front: 'Pipelining', back: 'Different stages of different instructions run at once. k stages, n ops: k + n − 1 steps instead of k·n.' },
   { topic: 'hw', front: 'Multiple issue', back: 'Duplicate functional units run the same operation on different data at once. Static = compile time; dynamic = run time (superscalar).' },
@@ -119,11 +119,11 @@ window.FLASHCARDS = [
   /* Recommended review exercises */
   { topic: 'review', front: 'Deadlock (4.9)', back: 'Threads block forever, each holding a lock another needs. Two threads taking mut0 and mut1 in opposite orders is the classic case.' },
   { topic: 'review', front: 'How to prevent the two-mutex deadlock', back: 'Acquire locks in the **same global order** in every thread (e.g. always mut0 before mut1). Switching to semaphores or spinning flags does not fix it.' },
-  { topic: 'review', front: 'Balancing work that grows with i (1.2)', back: 'Assign by work, not count: cyclic (core c gets c, c+p, …) or snake order, or block boundaries from the running total. Equal blocks leave the last core with the most work.' },
-  { topic: 'review', front: 'pthread_create keeps failing with EAGAIN (4.7)', back: 'Joinable threads that are never joined keep their resources. Join them, or detach them so they free resources when they finish.' },
-  { topic: 'review', front: 'Read lock to search, write lock to update? (4.13)', back: 'Unsafe: the list can change between releasing the read lock and getting the write lock. Hold the write lock for the whole Insert/Delete, or re-check.' },
-  { topic: 'review', front: 'Which threads can falsely share y? (4.17)', back: 'Only threads with adjacent blocks, at the boundary. In 8000 × 8000 with 4 threads, threads 0 and 2 are 2001 elements apart: impossible.' },
-  { topic: 'review', front: 'Two fixes for false sharing on y (4.19)', back: '(a) Pad y so each thread\'s elements sit on their own cache lines. (b) Accumulate in thread-private storage and write y once at the end.' },
-  { topic: 'review', front: 'Shared vs private in the shared-memory tree sum (2.24)', back: 'Shared: the loc_bin_cts rows, bin_count, thread_count, the barrier. Private: my_rank, divisor, diff, partner, loop index.' },
-  { topic: 'review', front: 'Histogram split by bins vs by data (2.23)', back: 'By bins: no races, but every thread reads all n elements, so time stays O(n). By data: O(n/p) per thread plus a tree sum. Splitting the data scales better.' }
+  { topic: 'review', front: 'n calls over p cores, where call i costs i + 1 units. How do you balance the load? (1.2)', back: 'Assign by work, not count: cyclic (core c gets c, c+p, …) or snake order, or block boundaries from the running total. Equal blocks leave the last core with the most work.' },
+  { topic: 'review', front: 'A loop creates threads forever and never joins them, and pthread_create starts failing with EAGAIN. Why, and what fixes it? (4.7)', back: 'Joinable threads that are never joined keep their resources. Join them, or detach them so they free resources when they finish.' },
+  { topic: 'review', front: 'Linked-list Insert: take a read lock while searching, release it, then take a write lock to link the new node. Safe? (4.13)', back: 'Unsafe: the list can change between releasing the read lock and getting the write lock. Hold the write lock for the whole Insert/Delete, or re-check.' },
+  { topic: 'review', front: '8000 × 8000 matrix-vector multiply on 4 threads, each computing 2000 consecutive elements of y. Which threads can falsely share y? (4.17)', back: 'Only threads with adjacent blocks, at the boundary. In 8000 × 8000 with 4 threads, threads 0 and 2 are 2001 elements apart: impossible.' },
+  { topic: 'review', front: 'Every thread repeatedly updates its own elements of a shared y that fits in one cache line. Two fixes? (4.19)', back: '(a) Pad y so each thread\'s elements sit on their own cache lines. (b) Accumulate in thread-private storage and write y once at the end.' },
+  { topic: 'review', front: 'Shared-memory tree sum of the threads\' histogram counts `loc_bin_cts[rank][]`: which variables are shared and which private? (2.24)', back: 'Shared: the loc_bin_cts rows, bin_count, thread_count, the barrier. Private: my_rank, divisor, diff, partner, loop index.' },
+  { topic: 'review', front: 'Histogram: split the work by data (private counts, then a tree sum) or by bins (each thread scans all the data for its own bins)? Which scales better? (2.23)', back: 'By bins: no races, but every thread reads all n elements, so time stays O(n). By data: O(n/p) per thread plus a tree sum. Splitting the data scales better.' }
 ];
