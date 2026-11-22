@@ -66,7 +66,7 @@
 
     function buildTopics() {
       const host = el('topics');
-      const opts = [['all', 'All topics']].concat(S.TOPIC_ORDER.map(t => [t, S.TOPICS[t]]));
+      const opts = [['all', 'All topics']].concat(S.TOPIC_ORDER.filter(t => ALL.some(c => c.topic === t)).map(t => [t, S.TOPICS[t]]));
       host.innerHTML = opts.map(o => '<button class="chip" type="button" data-topic="' + o[0] + '" aria-pressed="' + (o[0] === topic) + '">' + S.esc(o[1]) + '</button>').join('');
       host.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
         topic = b.dataset.topic;

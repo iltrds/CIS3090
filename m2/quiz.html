@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en" data-exam="mt2">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quizzes — CIS*3090 Midterm 2 Study</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-page="quiz">
+  <header id="site-header"></header>
+  <main>
+    <div id="picker">
+      <div class="page-head">
+        <h1>Topic quizzes</h1>
+        <p>Pick a topic. You'll see whether each answer is right, and why, before moving on. Answer choices are shuffled every time.</p>
+        <p><strong>Select all that apply</strong> questions are scored like the midterm: partial credit for picking some of the correct options, but <strong>any wrong pick scores 0</strong>.</p>
+      </div>
+      <div class="btn-row" style="margin-bottom:18px">
+        <label class="inline">Length
+          <select id="length">
+            <option value="10">10 questions</option>
+            <option value="all">Every question in the topic</option>
+          </select>
+        </label>
+      </div>
+      <ul class="topic-picker" id="topic-list"></ul>
+    </div>
+
+    <div id="runner" hidden>
+      <div class="qcard">
+        <div class="progress-line" aria-hidden="true"><span id="bar"></span></div>
+        <div class="q-meta"><span id="q-pos"></span><span id="q-topic"></span><span id="q-kind"></span></div>
+        <div id="stem"></div>
+        <div class="options" id="options" role="group" aria-label="Answer choices"></div>
+        <div id="feedback"></div>
+        <div class="btn-row">
+          <button class="btn" type="button" id="check" hidden>Check answer</button>
+          <button class="btn" type="button" id="next" hidden>Next question</button>
+          <button class="btn quiet" type="button" id="quit">End quiz</button>
+        </div>
+        <p class="muted" style="margin-top:14px;font-size:0.9rem">Keys: <span class="kbd">A</span>–<span class="kbd">E</span> or <span class="kbd">1</span>–<span class="kbd">5</span> to answer (or toggle, on select-all questions), <span class="kbd">Enter</span> to check or go on.</p>
+      </div>
+    </div>
+
+    <div id="results" hidden>
+      <div class="qcard">
+        <h1 id="r-title">Quiz complete</h1>
+        <p class="score-big" id="r-score"></p>
+        <p class="muted" id="r-sub"></p>
+        <div class="btn-row" style="margin:18px 0 30px">
+          <button class="btn" type="button" id="retry-missed">Retry the ones I missed</button>
+          <button class="btn secondary" type="button" id="again">New quiz on this topic</button>
+          <button class="btn quiet" type="button" id="back">All topics</button>
+        </div>
+        <div id="review"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="../assets/common.js"></script>
+  <script src="data/bank.js"></script>
+  <script>
+  (function () {
+    const S = window.Study;
+    const BANK = window.QUIZ_BANK;
+    const el = id => document.getElementById(id);
+    const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+
+    let topic = null, list = [], idx = 0, order = [], answered = false, results = [], picks = new Set();
+
+    function bestMap() { return S.store.get('quizBest', {}); }
+
+    function buildPicker() {
+      const best = bestMap();
+      const rows = S.TOPIC_ORDER.map(t => {
+        const n = BANK.filter(q => q.topic === t).length;
+        const b = best[t];
+        return '<li><button type="button" data-topic="' + t + '"><span class="t-name">' + S.esc(S.TOPICS[t]) + '</span>' +
+          '<span class="t-count">' + n + ' questions</span>' +
+          '<span class="t-best">' + (b ? 'Best ' + b.pct + '%' : 'Not tried') + '</span></button></li>';
+      });
+      const bm = best.mixed;
+      rows.push('<li><button type="button" data-topic="mixed"><span class="t-name">Mixed: every topic</span>' +
+        '<span class="t-count">' + BANK.length + ' questions</span>' +
+        '<span class="t-best">' + (bm ? 'Best ' + bm.pct + '%' : 'Not tried') + '</span></button></li>');
+      el('topic-list').innerHTML = rows.join('');
+      el('topic-list').querySelectorAll('button').forEach(b => b.addEventListener('click', () => start(b.dataset.topic)));
+    }
+
+    function start(t, questions) {
+      topic = t;
+      if (questions) list = questions;
+      else {
+        const pool = t === 'mixed' ? BANK : BANK.filter(q => q.topic === t);
+        const len = el('length').value === 'all' ? pool.length : Math.min(t === 'mixed' ? 20 : 10, pool.length);
+        list = S.shuffle(pool).slice(0, len);
+      }
+      idx = 0; results = [];
+      el('picker').hidden = true; el('results').hidden = true; el('runner').hidden = false;
+      show();
+      window.scrollTo(0, 0);
+    }
+
+    function show() {
+      const q = list[idx], multi = S.isMulti(q);
+      order = S.optionOrder(q);
+      answered = false; picks = new Set();
+      el('bar').style.width = (100 * idx / list.length) + '%';
+      el('q-pos').textContent = 'Question ' + (idx + 1) + ' of ' + list.length;
+      el('q-topic').textContent = S.TOPICS[q.topic];
+      el('q-kind').textContent = S.KIND_LABEL[q.kind];
+      el('stem').innerHTML = S.stemHTML(q);
+      el('options').className = 'options' + (multi ? ' multi' : '');
+      el('options').innerHTML = order.map((oi, k) =>
+        '<button class="option" type="button" data-k="' + k + '"' + (multi ? ' role="checkbox" aria-checked="false"' : '') + '><span class="letter">' + LETTERS[k] + '</span><span>' + S.md(q.options[oi]) + '</span></button>').join('');
+      el('options').querySelectorAll('.option').forEach(b => b.addEventListener('click', () => choose(Number(b.dataset.k))));
+      el('feedback').innerHTML = '';
+      el('next').hidden = true;
+      el('check').hidden = !multi;
+      el('check').disabled = true;
+    }
+
+    function choose(k) {
+      if (answered) return;
+      if (!S.isMulti(list[idx])) { answer(order[k]); return; }
+      if (picks.has(k)) picks.delete(k); else picks.add(k);
+      const b = el('options').querySelectorAll('.option')[k];
+      b.setAttribute('aria-checked', String(picks.has(k)));
+      el('check').disabled = picks.size === 0;
+    }
+
+    function answer(chosen) {
+      if (answered) return;
+      answered = true;
+      const q = list[idx], multi = S.isMulti(q);
+      const c = S.credit(q, chosen);
+      results.push({ q: q, chosen: chosen, credit: c });
+      const correctSet = multi ? q.answer : [q.answer];
+      const chosenSet = multi ? chosen : [chosen];
+      el('options').querySelectorAll('.option').forEach((b, j) => {
+        b.disabled = true;
+        const oi = order[j], isRight = correctSet.indexOf(oi) >= 0, isPicked = chosenSet.indexOf(oi) >= 0;
+        if (isRight && isPicked) b.classList.add('correct');
+        else if (isRight) b.classList.add(multi ? 'missed' : 'correct');
+        else if (isPicked) b.classList.add('wrong');
+      });
+      const letters = correctSet.map(oi => LETTERS[order.indexOf(oi)]).sort().join(', ');
+      let cls, head;
+      if (c === 1) { cls = 'ok'; head = 'Correct.'; }
+      else if (c > 0) { cls = 'part'; head = 'Partial credit: ' + S.fmtCredit(c) + '. You found ' + chosenSet.length + ' of the ' + correctSet.length + ' correct options (' + letters + '); dashed borders mark the ones you missed.'; }
+      else if (multi && chosenSet.some(oi => correctSet.indexOf(oi) < 0)) { cls = 'no'; head = 'Scores 0: at least one pick is wrong. The correct options are ' + letters + '.'; }
+      else { cls = 'no'; head = 'Not quite. The answer is ' + letters + '.'; }
+      el('feedback').innerHTML = '<div class="feedback ' + cls + '" role="status"><strong>' + S.esc(head) + '</strong>' + S.md(q.why) + '</div>';
+      el('check').hidden = true;
+      el('next').hidden = false;
+      el('next').textContent = idx === list.length - 1 ? 'See results' : 'Next question';
+      el('next').focus();
+    }
+
+    function check() {
+      if (answered || !picks.size) return;
+      answer(Array.from(picks).map(k => order[k]));
+    }
+
+    function next() {
+      if (!answered) return;
+      if (idx < list.length - 1) { idx++; show(); window.scrollTo(0, 0); }
+      else finish();
+    }
+
+    function optionList(q, idxs) {
+      const arr = Array.isArray(idxs) ? idxs : [idxs];
+      return arr.map(i => S.md(q.options[i])).join('<br>');
+    }
+
+    function finish() {
+      el('runner').hidden = true; el('results').hidden = false;
+      const score = results.reduce((s, r) => s + r.credit, 0);
+      const pct = Math.round(100 * score / results.length);
+      el('r-score').textContent = S.fmtCredit(Math.round(score * 100) / 100) + ' / ' + results.length;
+      el('r-title').textContent = (topic === 'mixed' ? 'Mixed quiz' : S.TOPICS[topic]) + ' complete';
+      el('r-sub').textContent = pct + '%' + (pct >= 80 ? '. Solid. Try the practice exam next.' : '. Reread this topic, then retry the ones you missed.');
+      const best = bestMap();
+      if (!best[topic] || pct > best[topic].pct) { best[topic] = { score: score, total: results.length, pct: pct }; S.store.set('quizBest', best); }
+      const missed = results.filter(r => r.credit < 1);
+      el('retry-missed').hidden = missed.length === 0;
+      el('review').innerHTML = missed.length
+        ? '<h2>Review what you missed</h2>' + missed.map(r =>
+            '<div class="exam-q">' + S.stemHTML(r.q) +
+            '<p><strong>Your answer' + (S.isMulti(r.q) ? 's' : '') + ':</strong><br>' + optionList(r.q, r.chosen) +
+            '<br><strong>Correct:</strong><br>' + optionList(r.q, r.q.answer) +
+            (r.credit > 0 ? '<br><em>Partial credit ' + S.fmtCredit(r.credit) + '</em>' : '') + '</p>' +
+            '<div class="feedback ok">' + S.md(r.q.why) + '</div></div>').join('')
+        : '<p>No misses. Nice work.</p>';
+      window.scrollTo(0, 0);
+    }
+
+    el('check').addEventListener('click', check);
+    el('next').addEventListener('click', next);
+    el('quit').addEventListener('click', () => { if (results.length) finish(); else back(); });
+    function back() { el('runner').hidden = true; el('results').hidden = true; el('picker').hidden = false; buildPicker(); window.scrollTo(0, 0); }
+    el('back').addEventListener('click', back);
+    el('again').addEventListener('click', () => start(topic));
+    el('retry-missed').addEventListener('click', () => start(topic, S.shuffle(results.filter(r => r.credit < 1).map(r => r.q))));
+
+    document.addEventListener('keydown', e => {
+      if (el('runner').hidden) return;
+      if (e.target.closest && e.target.closest('select, input')) return;
+      const n = list[idx] ? list[idx].options.length : 4;
+      const key = e.key.toUpperCase();
+      let k = LETTERS.indexOf(key);
+      if (k < 0) k = ['1', '2', '3', '4', '5'].indexOf(e.key);
+      if (k >= 0 && k < n && !answered) { e.preventDefault(); choose(k); }
+      else if (e.key === 'Enter') {
+        if (!answered && S.isMulti(list[idx]) && picks.size && document.activeElement !== el('check')) { e.preventDefault(); check(); }
+        else if (answered && document.activeElement !== el('next')) { e.preventDefault(); next(); }
+      }
+    });
+
+    buildPicker();
+    const params = new URLSearchParams(window.location.search);
+    const want = params.get('topic');
+    if (want && (want === 'mixed' || S.TOPICS[want])) {
+      if (params.get('all')) el('length').value = 'all';
+      start(want);
+    }
+  })();
+  </script>
+</body>
+</html>

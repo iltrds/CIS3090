@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en" data-exam="mt2">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Read — CIS*3090 Midterm 2 Study</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body data-page="read">
+  <header id="site-header"></header>
+  <main>
+    <div class="page-head">
+      <h1>Read</h1>
+      <p>Everything on Midterm 2, following the prof's study guide. Each section names the lectures it comes from, and the blue-edged boxes are demos you can step through. Lectures 12 and 13 (odd-even sort and heat distribution with MPI) are not on this midterm.</p>
+    </div>
+
+    <div class="reading">
+      <nav class="toc" aria-label="Sections">
+        <ol>
+          <li><a href="#perf">1. Performance and Amdahl</a></li>
+          <li><a href="#arch">2. Architectures and data layout</a></li>
+          <li><a href="#mpi">3. MPI basics</a></li>
+          <li><a href="#coll">4. Collectives and the trapezoidal rule</a></li>
+          <li><a href="#gpu">5. GPGPU concepts</a></li>
+          <li><a href="#warp">6. Programming with Warp</a></li>
+          <li><a href="#img">7. Image processing</a></li>
+          <li><a href="#compare">8. Pthreads vs MPI vs Warp</a></li>
+          <li><a href="#cheat">Cheat sheet</a></li>
+        </ol>
+      </nav>
+
+      <article class="article">
+
+<div class="callout">
+<p><strong>The exam:</strong> Thursday, November 26. 27 questions, mostly single-answer multiple choice, plus some clearly marked <strong>select all that apply</strong> (SAA). No aids.</p>
+<p><strong>Scoring:</strong> no penalty for a wrong single answer, so never leave one blank. On SAA questions you get partial credit for picking some of the correct answers, but <strong>any incorrect selection scores 0</strong> for that question. If you're unsure about an option, leave it out.</p>
+<p><strong>Formulas you must know:</strong> linear speedup, efficiency, Amdahl's law.</p>
+</div>
+
+<!-- ================= 1 ================= -->
+<section id="perf">
+<h2>1. Performance and Amdahl's law</h2>
+<p class="source">Lecture 14 (part 2), textbook 2.6.1–2.6.2</p>
+<p class="lead">Speedup grows as you add cores, but each extra core is worth less than the one before, and the serial part of the program sets a hard ceiling.</p>
+
+<h3>Speedup and efficiency</h3>
+<div class="formula">S = T<sub>serial</sub> / T<sub>parallel</sub> &nbsp;&nbsp;&nbsp; E = S / p = T<sub>serial</sub> / (p × T<sub>parallel</sub>)</div>
+<ul>
+<li><strong>Linear speedup</strong> is the best case: S = p, so T<sub>parallel</sub> = T<sub>serial</sub> / p and E = 1. It normally doesn't happen.</li>
+<li>Speedup depends less on input size than run time does, so it's the easier number to talk about.</li>
+<li><strong>Efficiency</strong> is the share of the work each core contributes, its utilization. As p grows, S usually rises while E falls.</li>
+</ul>
+<div class="table-wrap"><table>
+<thead><tr><th>p</th><th>1</th><th>2</th><th>4</th><th>8</th><th>16</th></tr></thead>
+<tbody>
+<tr><td>S</td><td>1</td><td>1.9</td><td>3.6</td><td>6.5</td><td>10.8</td></tr>
+<tr><td>E = S/p</td><td>1</td><td>0.95</td><td>0.9</td><td>0.81</td><td>0.675</td></tr>
+</tbody></table></div>
+<p>The lecture's example: speedup keeps increasing, but efficiency drops, so each added processor is worth less.</p>
+
+<h3>Overhead</h3>
+<div class="formula">T<sub>parallel</sub> = T<sub>serial</sub> / p + T<sub>overhead</sub></div>
+<p>Overheads that grow with the number of threads or processes: managing threads, critical sections, mutex function calls, network I/O (distributed systems) and file I/O. They're why efficiency usually drops as p grows. When the problem gets bigger, overhead usually grows more slowly than T<sub>serial</sub>, so speedup and efficiency both go up.</p>
+
+<h3>Amdahl's law</h3>
+<p>Let <strong>a</strong> be the inherently serial fraction of the program, so 1 − a is parallelizable and gets perfect speedup on p cores:</p>
+<div class="formula">S = 1 / ( (1 − a)/p + a ) &nbsp;&nbsp;→&nbsp;&nbsp; 1/a as p → ∞</div>
+<ul>
+<li>Lecture example: T<sub>serial</sub> = 20 s, 90% parallelizable. T<sub>parallel</sub> = 18/p + 2 s, so S = 1 / (0.9/p + 0.1).</li>
+<li>Limits: a = 0.5 → max 2; a = 0.1 → max 10; a = 0.05 → max 20; a = 0.01 → max 100.</li>
+<li>Use it to bound the payoff: measure the serial portion, compute the ceiling, then decide how many cores (or how much cloud hardware) is worth buying.</li>
+<li>Amdahl's law says parallelization alone never gives super-linear speedup. With a = 0, S = p.</li>
+</ul>
+<div class="table-wrap"><table>
+<thead><tr><th>p (a = 0.1)</th><th>1</th><th>2</th><th>4</th><th>8</th><th>16</th></tr></thead>
+<tbody>
+<tr><td>S</td><td>1</td><td>1.82</td><td>3.07</td><td>4.7</td><td>6.4</td></tr>
+<tr><td>E</td><td>1</td><td>0.91</td><td>0.77</td><td>0.59</td><td>0.40</td></tr>
+</tbody></table></div>
+<div class="demo" data-demo="amdahl"></div>
+<p><strong>Quick check:</strong> 100 s on 1 core, 40 s on 4, 25 s on 8. S goes 2.5 → 4; E goes 2.5/4 = 0.625 → 4/8 = 0.5. Speedup up, efficiency down.</p>
+</section>
+
+<!-- ================= 2 ================= -->
+<section id="arch">
+<h2>2. Parallel architectures and data layout</h2>
+<p class="source">Lecture 14 (part 1) and Lecture 7, textbook 2.3</p>
+<p class="lead">Flynn's taxonomy classifies machines by instruction and data streams; how you lay out data in memory decides how fast any of them can feed on it.</p>
+
+<h3>Flynn's taxonomy</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Class</th><th>Meaning</th><th>Example</th></tr></thead>
+<tbody>
+<tr><td>SISD</td><td>Single instruction, single data</td><td>Classic serial von Neumann single core</td></tr>
+<tr><td>SIMD</td><td>One control unit, many ALUs: the same instruction on many data items at once (m ALUs → arithmetic up to m× faster)</td><td>Vector processors, x86 SSE; good for simple loops over big arrays (data parallelism), not much else</td></tr>
+<tr><td>MISD</td><td>Multiple instructions on a single data stream</td><td>Very few real systems</td></tr>
+<tr><td>MIMD</td><td>Independent cores, each with its own control and ALU, running asynchronously</td><td>Multicore CPUs (shared memory) and clusters (distributed memory)</td></tr>
+</tbody></table></div>
+
+<h3>Vector processors (SIMD)</h3>
+<p>Operate on whole vectors (arrays) in vector registers; the same operation is applied to every element at once. Vector length is fixed per system, normally 4 to 256 elements of 64 bits.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Benefits</th><th>Drawbacks</th></tr></thead>
+<tbody><tr>
+<td>Fast and easy to use; compilers are good at finding code to vectorize and give feedback on loops they couldn't; high memory bandwidth; every loaded item is used (unlike a cache line)</td>
+<td>Don't work well with irregular data structures (anything but arrays); hard to scale, because longer vectors aren't very useful</td>
+</tr></tbody></table></div>
+
+<h3>Shared vs distributed memory</h3>
+<ul>
+<li><strong>UMA</strong> (uniform memory access): one big memory, same access time for every core. Easier to program.</li>
+<li><strong>NUMA</strong> (nonuniform): each chip has its own memory; local access is faster, another chip's memory is slower. Allows more total memory.</li>
+<li><strong>Cluster</strong>: a collection of systems on a commodity network (Ethernet). Nodes are usually shared-memory machines themselves, so clusters are <strong>hybrid</strong> systems.</li>
+<li><strong>Grid</strong>: many clusters spread over a large geographic area; often <strong>heterogeneous</strong> (different hardware and operating systems).</li>
+<li>Interconnects: a <strong>bus</strong> is cheap and flexible but shared, so more processors means more waiting. A <strong>crossbar switch</strong> gives multiple paths so processors can reach different memory modules at once; it's faster but expensive, and the only conflict is two processors wanting the same module.</li>
+</ul>
+
+<h3>Data layout: flat and contiguous</h3>
+<ul>
+<li>Store 2D data as one 1D array, <code>a[i*N + j]</code>, rather than an array of row pointers or a linked structure. Looping over a flat array touches neighbouring addresses: good <strong>spatial locality</strong>, so each cache line fetched is fully used.</li>
+<li>Pointer-chasing structures (lists, trees, arrays of pointers to separately allocated rows) scatter data across memory and waste cache lines.</li>
+<li>A contiguous block can be moved <strong>in one piece</strong>: one MPI message (buffer pointer + count) or one copy to the GPU. Scattered data needs many messages or a packing step first.</li>
+</ul>
+<div class="demo" data-demo="cache"></div>
+</section>
+
+<!-- ================= 3 ================= -->
+<section id="mpi">
+<h2>3. Distributed memory and MPI basics</h2>
+<p class="source">Lecture 9, textbook 3.1</p>
+<p class="lead">MPI runs separate processes that share nothing; all data moves in explicit messages, and a receive only completes when communicator, source and tag all match.</p>
+
+<h3>Why distributed memory</h3>
+<ul>
+<li>Machines are connected by a network instead of a bus, so sharing data takes time. Threads share data almost instantly.</li>
+<li>It only pays off when each machine spends <strong>more time computing than communicating</strong>, so it suits long, data-parallel computations. Example: a render farm sends each machine the scene data for a frame (or a batch of frames).</li>
+<li>Processes can be on different machines, the same machine, or both; MPI hides which.</li>
+</ul>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Pthreads</th><th>MPI</th></tr></thead>
+<tbody>
+<tr><td>Memory</td><td>Shared</td><td>Distributed</td></tr>
+<tr><td>Unit</td><td>Threads</td><td>Processes, all running the same program (SPMD)</td></tr>
+<tr><td>Designed for</td><td>Concurrency; you build parallel tools yourself</td><td>Parallel computation; collectives built in</td></tr>
+</tbody></table></div>
+
+<h3>The hello-world skeleton</h3>
+<pre><code>#include &lt;mpi.h&gt;
+int main(void) {
+    char greeting[MAX_STRING];
+    int comm_sz, my_rank;
+
+    MPI_Init(NULL, NULL);                       /* start MPI */
+    MPI_Comm_size(MPI_COMM_WORLD, &amp;comm_sz);    /* number of processes */
+    MPI_Comm_rank(MPI_COMM_WORLD, &amp;my_rank);    /* my ID, 0 … comm_sz-1 */
+
+    if (my_rank != 0) {                         /* producers */
+        sprintf(greeting, "Greetings from process %d of %d!", my_rank, comm_sz);
+        MPI_Send(greeting, strlen(greeting)+1, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+    } else {                                    /* rank 0 consumes */
+        printf("Process %d of %d is ready to receive\n\n", my_rank, comm_sz);
+        for (int q = 1; q &lt; comm_sz; q++) {
+            MPI_Recv(greeting, MAX_STRING, MPI_CHAR, q, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            printf("%s\n", greeting);
+        }
+    }
+    MPI_Finalize();                             /* free MPI's resources */
+    return 0;
+}</code></pre>
+<ul>
+<li>Compile with the wrapper <code>mpicc mpi_hello.c -o mpi_hello</code>; run with <code>mpiexec -n 4 ./mpi_hello</code> (4 processes).</li>
+<li>One program, different behaviour by rank, like <code>fork()</code>. Write it to work for any number of processes.</li>
+<li>The number of sends and receives must match, or something blocks forever.</li>
+<li>Because rank 0 receives in rank order (source <code>q</code>), the greetings print 1, 2, 3 every time.</li>
+</ul>
+
+<h3>Send and receive</h3>
+<pre><code>int MPI_Send(const void* buf, int count, MPI_Datatype type,
+             int dest, int tag, MPI_Comm comm);
+int MPI_Recv(void* buf, int count, MPI_Datatype type,
+             int source, int tag, MPI_Comm comm, MPI_Status* status);</code></pre>
+<ul>
+<li><code>count</code> is a number of elements, not bytes; <code>type</code> is a macro such as <code>MPI_CHAR</code>, <code>MPI_INT</code>, <code>MPI_DOUBLE</code>. For a string send <code>strlen(s)+1</code> to include the terminator.</li>
+<li>In <code>MPI_Recv</code>, <code>count</code> is the <strong>buffer capacity</strong>; the message can be shorter. It is received successfully if the types match and the buffer is at least as big as the message.</li>
+<li>A <strong>tag</strong> is a non-negative int used to tell message types apart (for example, work vs results, as in A2).</li>
+<li>A <strong>communicator</strong> is a group of processes that can talk to each other, like a radio channel. <code>MPI_COMM_WORLD</code> holds everyone. Separate communicators keep libraries' messages from being received by accident.</li>
+<li>Both return <code>MPI_SUCCESS</code> on success, otherwise an error code.</li>
+</ul>
+
+<h3>Message matching</h3>
+<p>A message sent by rank q is received by rank r's <code>MPI_Recv</code> only if <strong>all</strong> of these agree:</p>
+<ul>
+<li>the communicators are the same,</li>
+<li>the tags are the same (or the receiver uses <code>MPI_ANY_TAG</code>),</li>
+<li>the send's <code>dest</code> is r, and the receive's <code>source</code> is q (or <code>MPI_ANY_SOURCE</code>).</li>
+</ul>
+<p>Only the receiver can use wildcards; a sender always names a rank and a tag. There is no wildcard for the communicator.</p>
+
+<h3>After a wildcard receive: the status</h3>
+<pre><code>MPI_Status status;
+int n;
+MPI_Recv(buf, 256, MPI_CHAR, MPI_ANY_SOURCE, TAG_RESULT, MPI_COMM_WORLD, &amp;status);
+int who = status.MPI_SOURCE;            /* which rank sent it */
+int tag = status.MPI_TAG;               /* which tag it had   */
+MPI_Get_count(&amp;status, MPI_CHAR, &amp;n);  /* how many elements arrived */</code></pre>
+<p><code>MPI_Status</code> has at least <code>MPI_SOURCE</code>, <code>MPI_TAG</code> and <code>MPI_ERROR</code>. The count isn't a field: call <code>MPI_Get_count</code> with the type. <code>MPI_Recv</code>'s return value is only an error code, and <code>sizeof(buf)</code> is the buffer size, not the message size. Pass <code>MPI_STATUS_IGNORE</code> if you don't need any of this.</p>
+<p><code>MPI_ANY_SOURCE</code> lets a manager take results in whatever order workers finish, instead of waiting on rank 1 while rank 7 is already done.</p>
+
+<h3>Ordering and blocking</h3>
+<ul>
+<li><strong>Nonovertaking:</strong> two messages from the same sender to the same receiver (that both match) arrive in the order sent.</li>
+<li>There is <strong>no global order</strong> across different senders.</li>
+<li><code>MPI_Recv</code> always blocks until a matching message arrives.</li>
+<li><code>MPI_Send</code> may <strong>buffer</strong> the message and return, or <strong>block</strong> until it's received; which one is implementation-dependent. After a buffered send you don't know whether it was delivered.</li>
+<li>Non-blocking <code>MPI_Isend</code>/<code>MPI_Irecv</code> exist; we don't use them in this course.</li>
+</ul>
+<p><strong>Blocking pitfalls:</strong> a receive with no matching send hangs forever. If the source, tag or communicator doesn't match, the receive never completes (or it matches the wrong send). A send that blocks waiting for a receive can hang. A buffered send with no receive is lost.</p>
+<div class="demo" data-demo="matching"></div>
+
+<h3>Input and output</h3>
+<ul>
+<li>Assume <strong>only rank 0 reads stdin</strong>. It must send (or broadcast) what it reads to the others.</li>
+<li>Most implementations let every rank write to stdout and stderr, but the order is <strong>nondeterministic</strong>: lines can appear in any order or interleave. For ordered output, send everything to rank 0 and print there.</li>
+</ul>
+<pre><code>void Get_input(int my_rank, int comm_sz, double* a_p, double* b_p, int* n_p) {
+    if (my_rank == 0) {
+        scanf("%lf %lf %d", a_p, b_p, n_p);
+        for (int dest = 1; dest &lt; comm_sz; dest++) {
+            MPI_Send(a_p, 1, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(b_p, 1, MPI_DOUBLE, dest, 0, MPI_COMM_WORLD);
+            MPI_Send(n_p, 1, MPI_INT,    dest, 0, MPI_COMM_WORLD);
+        }
+    } else {
+        MPI_Recv(a_p, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(b_p, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(n_p, 1, MPI_INT,    0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+}</code></pre>
+<p>All three messages use tag 0, and that's safe: nonovertaking guarantees a, b, n arrive in the order rank 0 sent them.</p>
+</section>
+
+<!-- ================= 4 ================= -->
+<section id="coll">
+<h2>4. Collectives and the trapezoidal rule</h2>
+<p class="source">Lectures 10 and 11, textbook 3.2–3.4</p>
+<p class="lead">A collective involves every process in a communicator; MPI does the tree-structured work for you and puts the result where the call says.</p>
+
+<h3>Point-to-point vs collective</h3>
+<ul>
+<li>Point-to-point (<code>MPI_Send</code>/<code>MPI_Recv</code>) is between two processes.</li>
+<li>A collective involves <strong>all processes in the communicator</strong>, and every one of them must call it. If one rank skips it, the others hang.</li>
+<li>Collectives take no tag; they're matched by communicator and the order in which they're called.</li>
+<li>MPI implementations spread the work over a tree (log₂ p rounds) instead of having one process do p − 1 steps, and tune it for the system.</li>
+</ul>
+
+<div class="table-wrap"><table>
+<thead><tr><th>Call</th><th>Pattern</th><th>Who has the result</th></tr></thead>
+<tbody>
+<tr><td><code>MPI_Bcast(data, count, type, root, comm)</code></td><td>1 → N, same data to everyone</td><td>All ranks. The root sends; every other rank receives into <code>data</code></td></tr>
+<tr><td><code>MPI_Reduce(in, out, count, type, op, dest, comm)</code></td><td>N → 1, combined with op</td><td>Only <code>dest</code>; <code>out</code> isn't set on other ranks</td></tr>
+<tr><td><code>MPI_Allreduce(in, out, count, type, op, comm)</code></td><td>N → N ("butterfly")</td><td>All ranks. Same as Reduce but no dest argument</td></tr>
+<tr><td><code>MPI_Scatter(send, scount, stype, recv, rcount, rtype, src, comm)</code></td><td>1 → N, a different chunk to each</td><td>Each rank, including src, gets its own chunk in <code>recv</code>; <code>send</code> only matters on src</td></tr>
+<tr><td><code>MPI_Gather(send, scount, stype, recv, rcount, rtype, dest, comm)</code></td><td>N → 1, chunks assembled in rank order</td><td>Only <code>dest</code>'s <code>recv</code> is filled</td></tr>
+</tbody></table></div>
+<p>Operators: <code>MPI_SUM</code>, <code>MPI_PROD</code>, <code>MPI_MIN</code>, <code>MPI_MAX</code> and others. With count &gt; 1 the operation is applied element by element to arrays. Example: <code>MPI_Reduce(&amp;tmpVal, &amp;sum, 1, MPI_DOUBLE, MPI_SUM, 0, comm)</code> adds one double from each process into <code>sum</code> on rank 0.</p>
+<div class="demo" data-demo="collectives"></div>
+
+<h3>The typical pattern</h3>
+<ol>
+<li>Rank 0 reads the parameters; <strong>broadcast them once</strong>.</li>
+<li>Every rank <strong>computes locally</strong> on its own block.</li>
+<li>Combine with <strong>one</strong> Reduce (answer on rank 0) or Allreduce (everyone needs it).</li>
+</ol>
+<p>Don't reduce after every element, and don't send each element to a worker and back: on a slow network every message is expensive. The classic send/gather pattern from the hello example (workers send, rank 0 receives in a loop) does the same job as a gather or reduce, just serially.</p>
+
+<h3>Trapezoidal rule</h3>
+<p>Approximate the area under f from a to b with n trapezoids of width h:</p>
+<div class="formula">h = (b − a)/n &nbsp;&nbsp; area ≈ h [ f(x<sub>0</sub>)/2 + f(x<sub>1</sub>) + … + f(x<sub>n−1</sub>) + f(x<sub>n</sub>)/2 ]</div>
+<p>One trapezoid has area (h/2)(f(x<sub>i</sub>) + f(x<sub>i+1</sub>)). It underestimates where f is concave and overestimates where f is convex; narrower trapezoids average the errors out.</p>
+<pre><code>double Trap(double left, double right, int count, double h) {
+    double estimate = (f(left) + f(right)) / 2.0;
+    for (int i = 1; i &lt;= count - 1; i++)
+        estimate += f(left + i*h);
+    return estimate * h;
+}</code></pre>
+<p>Foster's steps for MPI: each process gets its own sub-interval and computes a partial integral; every process needs a, b and n; partial results are summed on one process. Process 0 also does the I/O.</p>
+<pre><code>Get_input(my_rank, comm_sz, &amp;a, &amp;b, &amp;n);
+h = (b - a) / n;                       /* same on every process */
+local_n = n / comm_sz;                 /* assumes comm_sz divides n */
+local_a = a + my_rank * local_n * h;
+local_b = local_a + local_n * h;
+local_int = Trap(local_a, local_b, local_n, h);
+
+MPI_Reduce(&amp;local_int, &amp;total_int, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);</code></pre>
+<p>The first version ended with rank 0 receiving <code>comm_sz − 1</code> messages in a loop and adding them; the improved version replaces that with <code>MPI_Reduce</code>, and replaces the send loop in <code>Get_input</code> with three <code>MPI_Bcast</code> calls (rank 0 does the <code>scanf</code> inside <code>if (my_rank == 0)</code>, but <strong>every</strong> rank calls <code>MPI_Bcast</code>). Example: a = 0, b = 8, n = 1024, 4 processes → h = 1/128, local_n = 256, rank 2 integrates from 4 to 6.</p>
+</section>
+
+<!-- ================= 5 ================= -->
+<section id="gpu">
+<h2>5. GPGPU concepts</h2>
+<p class="source">Lecture 15</p>
+<p class="lead">A GPU is thousands of simple cores running one kernel over a stream of data; it lives in its own memory, so the data has to be copied there and back.</p>
+
+<h3>Why GPUs exist</h3>
+<ul>
+<li>A 1920 × 1080 frame is about 2 million pixels; at 60 FPS that's about 120 million pixel colours per second, each needing several matrix/vector operations. A CPU can't keep up.</li>
+<li>GPUs skip complex branch logic and cache management and spend their transistors on processing units: a few hundred to over 10,000 cores, against 2–96 (up to about 250) for CPUs.</li>
+<li><strong>GPGPU</strong>: general-purpose computing on the GPU. Physics simulation, machine learning (it largely enabled the last 15–20 years of ML), robotics, image/audio/video processing, science, finance.</li>
+</ul>
+
+<h3>The stream programming model</h3>
+<ul>
+<li>A <strong>stream</strong> is an ordered set of data of one type (numbers, points, triangles, matrices), usually thousands of elements or more.</li>
+<li>A <strong>kernel</strong> is a small program applied to whole streams, taking one or more streams in and producing one or more out. The most common use is a <strong>map</strong>: one function on every element. Others: expansion (more outputs than inputs), reduction (combine elements), filter (output a subset).</li>
+<li>Kernel outputs depend only on kernel inputs. A thread can read any input element but writes its own output, and must not depend on another thread's output. That independence is what lets a serial-looking kernel run data-parallel.</li>
+<li>Only one kernel is applied to a stream at a time; several kernels run in sequence.</li>
+</ul>
+
+<h3>SIMD vs SIMT</h3>
+<ul>
+<li><strong>SIMD</strong> (CPU vector units): one thread, one register file with very wide registers; the same instruction across execution lanes.</li>
+<li><strong>SIMT</strong> (GPU): many threads in lockstep sharing one fetch/decode (one PC), each with its own registers.</li>
+<li>Threads are grouped into <strong>shading units</strong> (CUDA cores, SIMT units), which are grouped into <strong>compute units</strong> of dozens (up to 128 or more) shading units.</li>
+<li><strong>Divergence:</strong> if threads in a lockstep group take different branches, the group runs both paths with inactive lanes masked off, so it costs the sum of both. Anything that breaks uniformity hurts; give every thread the same amount of work.</li>
+</ul>
+
+<h3>Heterogeneous computing and the copy cost</h3>
+<ul>
+<li>Pthreads and MPI are <strong>homogeneous</strong>: every execution unit is a compatible CPU core (Intel and AMD mix fine; Intel and ARM don't).</li>
+<li>GPGPU is <strong>heterogeneous</strong>: the host program on the CPU loads the data, sends it and the compiled kernels to the GPU (the device), launches the kernels, then copies the results back.</li>
+<li>CPU and GPU usually have <strong>separate memories</strong>, so it borrows from distributed memory: data crosses the bus, and that copy is expensive. For small problems it can be the dominant cost, which is why a naive GPU port can be slower than the CPU version. Once data is on the GPU, kernels access it directly (and can race).</li>
+<li>Design for it: <strong>flat, contiguous buffers</strong>, <strong>uniform work per thread</strong>, <strong>minimize CPU–GPU transfers</strong>, and give each element enough work to pay for the copy.</li>
+</ul>
+<p>Libraries: <strong>CUDA</strong> (Nvidia's proprietary platform, Nvidia hardware only, most popular), <strong>OpenCL</strong> (open standard, many platforms, declining) and <strong>Nvidia Warp</strong> (free, open source, used in this course).</p>
+</section>
+
+<!-- ================= 6 ================= -->
+<section id="warp">
+<h2>6. Programming with Warp</h2>
+<p class="source">Lectures 15 and 18</p>
+<p class="lead">Write the kernel and the host code in Python; Warp compiles the kernel at run time and launches one thread per element of the launch grid.</p>
+
+<h3>What Warp does</h3>
+<ul>
+<li>Runs on Nvidia GPUs in parallel (<code>device="cuda"</code>), or on the CPU as a <strong>single-threaded serial</strong> program (<code>device="cpu"</code>) with identical code and semantics. We use <code>"cpu"</code> in the course Docker container (Warp 1.16) and <code>"cuda"</code> on an Nvidia GPU or Google Colab.</li>
+<li>Both host and kernel code are Python; Warp JIT-generates C++/CUDA and compiles it. In CUDA or OpenCL you'd write host code in C and kernels in a separate language.</li>
+<li>Warp initializes itself on first use; <code>wp.init()</code> in older examples still works but isn't required.</li>
+</ul>
+
+<h3>Example: Z = X + Y</h3>
+<pre><code>import numpy as np
+import warp as wp
+
+@wp.kernel
+def addArrays(x: wp.array(dtype=float),
+              y: wp.array(dtype=float),
+              z: wp.array(dtype=float)):
+    tid = wp.tid()              # this thread's index
+    z[tid] = x[tid] + y[tid]    # one element per thread
+
+device = "cpu"
+hostX = np.array([1, 2, 3, 4], dtype=np.float32)
+hostY = np.array([2, 3, 4, 5], dtype=np.float32)
+x = wp.array(hostX, dtype=float, device=device)   # copy host → device
+y = wp.array(hostY, dtype=float, device=device)
+z = wp.zeros(len(hostX), dtype=float, device=device)
+
+wp.launch(kernel=addArrays, dim=len(z), inputs=[x, y], outputs=[z], device=device)
+print(z.numpy())                                   # copy device → host</code></pre>
+<ul>
+<li><code>@wp.kernel</code> marks the kernel. Warp is <strong>statically typed</strong>: every argument needs a type annotation, and Warp compiles from them.</li>
+<li>Kernels <strong>don't return values</strong>; they write results into an output array argument.</li>
+<li>You write the body for one element; conceptually the kernel applies to the whole stream.</li>
+<li><code>wp.tid()</code>: a scalar for a 1D launch (<code>i = wp.tid()</code>), a tuple for 2D/3D (<code>i, j = wp.tid()</code>, <code>i, j, k = wp.tid()</code>).</li>
+</ul>
+
+<h3>wp.launch</h3>
+<pre><code>wp.launch(kernel, dim=N, inputs=[...], outputs=[...], device="cuda")</code></pre>
+<ul>
+<li><code>dim</code> is the <strong>launch grid</strong> (how many threads), not an array's shape. For a simple map they coincide because we choose <code>dim=len(array)</code> or <code>dim=array.shape</code>.</li>
+<li>Warp concatenates <code>inputs=</code> and <code>outputs=</code> into the kernel's positional arguments, <strong>in order</strong>. It does not check which arrays you write to; <code>outputs=</code> is documentation.</li>
+<li><code>device</code> is optional and defaults to Warp's default device.</li>
+</ul>
+
+<h3>Passing constants</h3>
+<p>Pass values like k, a filter radius or sigma as ordinary typed kernel arguments:</p>
+<pre><code>@wp.kernel
+def scaleArray(source: wp.array(dtype=wp.float32),
+               dest: wp.array(dtype=wp.float32),
+               factor: float):
+    i = wp.tid()
+    dest[i] = factor * source[i]
+
+wp.launch(scaleArray, dim=source.shape, inputs=[source, dest, 2.0], device=device)</code></pre>
+<p>The value is read at launch, so you can change it without recompiling. (Closures are for values needed at compile time; not used in this course.)</p>
+
+<h3>The image pipeline</h3>
+<ol>
+<li>Load: <code>image = Image.open(fileName)</code> (PIL/Pillow).</li>
+<li>Check the mode: <code>image.mode</code>.</li>
+<li>To NumPy: <code>npInData = np.asarray(image, dtype=np.float32)</code>.</li>
+<li>To Warp: <code>inWarpImage = wp.array(npInData, dtype=wp.float32, device=device)</code>.</li>
+<li>Output: <code>outWarpImage = wp.zeros_like(inWarpImage)</code> (same shape, dtype, device, all zero).</li>
+<li>Launch the kernel.</li>
+<li>Back to NumPy: <code>npOutData = outWarpImage.numpy()</code>.</li>
+<li>To PIL: <code>Image.fromarray(np.uint8(np.clip(np.rint(npOutData), 0, 255)))</code>.</li>
+<li>Save: <code>imageOut.save(outFileName)</code>.</li>
+</ol>
+<p><strong>Why clip:</strong> sharpening overshoots above 255 and below 0 at strong edges, and <code>np.uint8</code> wraps around instead of clamping, which shows up as salt-and-pepper along edges.</p>
+
+<h3>Image modes and shapes</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Mode</th><th>Per pixel</th><th>NumPy shape</th></tr></thead>
+<tbody>
+<tr><td><code>L</code> (greyscale)</td><td>1 × 8-bit intensity</td><td>(h, w): no channel axis</td></tr>
+<tr><td><code>RGB</code></td><td>3 × 8-bit</td><td>(h, w, 3)</td></tr>
+<tr><td><code>RGBA</code></td><td>4 × 8-bit, A = alpha (transparency)</td><td>(h, w, 4)</td></tr>
+</tbody></table></div>
+<ul>
+<li>Careful with order: Pillow's <code>image.size</code> is <strong>(w, h)</strong>; NumPy's <code>.shape</code> is <strong>(h, w, c)</strong>.</li>
+<li>Two images can look identical but use different modes (b17_g.png is L, b17.png is RGBA). Always check the mode.</li>
+<li>Give greyscale a channel axis so one 3D kernel handles every mode: <code>npInData = npInData[:, :, np.newaxis]</code> → (h, w, 1); launch with <code>dim=npInData.shape</code> and use <code>i, j, k = wp.tid()</code>. Remove it before saving an L image: <code>npOutData = npOutData[:, :, 0]</code> (PIL won't build an image from (h, w, 1)).</li>
+<li>This layout is one thread per channel per pixel. The alternative is a 2D array of <code>wp.vec3</code>, one thread per pixel handling all three channels.</li>
+<li><strong>Alpha:</strong> filtering it is meaningless, and nothing fails, so a fully opaque image looks fine and you won't catch it by eye. Filter only <code>k &lt; 3</code> and <strong>copy alpha through unchanged</strong>. If you skip alpha without copying it, it stays 0 and you save a fully transparent image.</li>
+</ul>
+
+<h3>A filter kernel</h3>
+<pre><code>@wp.kernel
+def blurGreyscale(inputImage: wp.array2d(dtype=wp.float32),
+                  outputImage: wp.array2d(dtype=wp.float32)):
+    i, j = wp.tid()
+    height = inputImage.shape[0]
+    width = inputImage.shape[1]
+    # border policy for the slide: copy edge pixels (A3 doesn't allow this)
+    if i == 0 or j == 0 or i == height - 1 or j == width - 1:
+        outputImage[i, j] = inputImage[i, j]
+        return
+    acc = 0.2 * inputImage[i, j]
+    acc += 0.2 * inputImage[i - 1, j]
+    acc += 0.2 * inputImage[i + 1, j]
+    acc += 0.2 * inputImage[i, j - 1]
+    acc += 0.2 * inputImage[i, j + 1]
+    outputImage[i, j] = acc</code></pre>
+<p>Each thread writes exactly one output cell and only reads the input, so it's race-free with no synchronization. Never filter in place: neighbours would read values that are already filtered.</p>
+
+<h3>Timing on a GPU</h3>
+<ul>
+<li>CUDA launches are <strong>asynchronous</strong>: <code>wp.launch</code> returns before the work is done, so a timer around it measures only the launch.</li>
+<li><code>.numpy()</code> blocks until the kernel finishes, then copies; a timer ending there hides the kernel time inside "download".</li>
+<li>The first launch of a module compiles it (seconds); run once before timing.</li>
+<li>Use <code>wp.ScopedTimer(name, synchronize=True)</code>, time upload, kernel and download separately, and report the median of several runs.</li>
+</ul>
+<div class="table-wrap"><table>
+<thead><tr><th>3000 × 4000 RGB (144 MB as float32), Colab T4</th><th>Sharpen 3×3</th><th>Median 3×3</th></tr></thead>
+<tbody>
+<tr><td>GPU kernel</td><td>9 ms</td><td>16 ms</td></tr>
+<tr><td>CPU kernel (1 thread)</td><td>5.2 s</td><td>20 s</td></tr>
+<tr><td>Kernel-only speedup</td><td>~555×</td><td>~1270×</td></tr>
+<tr><td>GPU transfer (upload + download)</td><td>~132 ms</td><td>~135 ms</td></tr>
+<tr><td>GPU end to end</td><td>~141 ms</td><td>~151 ms</td></tr>
+<tr><td>End-to-end speedup</td><td>~37×</td><td>~134×</td></tr>
+</tbody></table></div>
+<p>Sharpen spends 94% of its GPU time moving data. Median moves the same 144 MB but does more compute per byte, so it looks much better end to end. <strong>The more work per byte moved, the better the GPU looks</strong>; a filter that copies data across the bus to do nine additions is the GPU's worst case. On the CPU, <code>.numpy()</code> took 0.08 ms because the data never left system memory.</p>
+<div class="demo" data-demo="transfer"></div>
+</section>
+
+<!-- ================= 7 ================= -->
+<section id="img">
+<h2>7. Image processing</h2>
+<p class="source">Lectures 16 and 17</p>
+<p class="lead">Most filters are a convolution: each output pixel is a weighted sum of its input neighbourhood. Smoothing kernels sum to 1, sharpening kernels sum to 0, and the border needs a policy.</p>
+
+<h3>Images and neighbourhoods</h3>
+<ul>
+<li>A greyscale image is one matrix of intensities; a colour image is three (R, G, B) or four (RGBA). Simple algorithms treat each colour channel as its own greyscale image.</li>
+<li><strong>4-neighbours</strong> of (x, y): (x±1, y) and (x, y±1). Add the four diagonals for the <strong>8-neighbours</strong>.</li>
+<li><strong>Filtering</strong> (image restoration or enhancement): removing noise, sharpening, contrast enhancement.</li>
+</ul>
+
+<h3>Discrete convolution</h3>
+<div class="formula">g(x, y) = Σ<sub>i=−1..1</sub> Σ<sub>j=−1..1</sub> w(i, j) · f(x + i, y + j)</div>
+<ol>
+<li>Centre the kernel on pixel P (so it needs odd dimensions: 3 × 3, 5 × 5, …).</li>
+<li>Multiply each pixel in the k × k neighbourhood by the kernel coefficient over it.</li>
+<li>Sum the products.</li>
+<li>Write the (normalized) sum to P's position in the <strong>output</strong> image.</li>
+</ol>
+<ul>
+<li>A kernel is also called a <strong>mask</strong> or a <strong>filter</strong>. <strong>Uniform</strong>: every coefficient the same; <strong>nonuniform</strong>: different weights; <strong>omnidirectional</strong>: same response in every direction.</li>
+<li><strong>Normalization</strong>: divide by the sum of the coefficients, usually written outside the matrix (1/9, 1/25). Then a constant area stays the same and the filter adds no bias: the mean intensity is preserved. If you forget, a 3 × 3 box filter makes the image about 9× brighter, and most of it clips to 255.</li>
+<li>Shapes: rectangular 5 × 5 (1/25), circular pill-box (1/21, corners zero), pyramidal (1/81, weights 1-2-3-2-1 outer products), cone, Gaussian.</li>
+</ul>
+<p>Worked example from the lecture (3 × 3 mean): neighbours 131, 134, 193, 251, 249, 221, 220, 206, 230 sum to 1835; ÷ 9 ≈ 204.</p>
+<div class="demo" data-demo="convolution"></div>
+
+<h3>Border strategies</h3>
+<p>Convolution needs the whole kernel inside the image. A 3 × 3 kernel can process only the (M − 2) × (N − 2) interior; in general a kernel with half-size (m₂, n₂) processes (M − 2m₂) × (N − 2n₂), so 5 × 5 → (M − 4) × (N − 4), 7 × 7 → (M − 6) × (N − 6).</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Strategy</th><th>What it does</th><th>Output size</th><th>Border pixels</th></tr></thead>
+<tbody>
+<tr><td>Copy of input pixels</td><td>Where convolution isn't possible, copy the input pixel</td><td>Same as input</td><td>Unprocessed (a frame of original pixels)</td></tr>
+<tr><td>Truncation of the image</td><td>Drop pixels where convolution isn't possible</td><td>Smaller, and offset relative to the input</td><td>Gone</td></tr>
+<tr><td>Truncation of the kernel</td><td>Special-case the borders with modified kernels that only cover pixels inside</td><td>Same as input</td><td>Processed; adds considerable complexity</td></tr>
+<tr><td>Reflection</td><td>An index outside the image is mirrored back inside, as if the image were mirrored at its edges</td><td>Same as input</td><td>Processed. The most useful option</td></tr>
+<tr><td>Circular indexing</td><td>The image wraps around in every direction</td><td>Same as input</td><td>Processed with pixels from the far side. Rarely used</td></tr>
+</tbody></table></div>
+
+<h3>Low-pass, high-pass, sharpening</h3>
+<ul>
+<li><strong>Low-pass filter</strong> (LPF): smoothing / de-noising. It passes low spatial frequencies and removes large, sudden, closely spaced intensity changes, whether they're noise or fine detail.</li>
+<li><strong>High-pass filter</strong> (HPF): image minus its low-pass version; keeps sudden changes such as object boundaries. An omnidirectional HPF kernel is positive at the centre and negative around it, and its coefficients <strong>sum to zero</strong>:
+<pre><code>−1 −1 −1
+−1  8 −1
+−1 −1 −1</code></pre>
+In a constant or slowly changing area it gives zero or near zero; at a rapid change it gives a large value. Sharpening also amplifies noise, so de-noise first.</li>
+<li><strong>High-boost filter</strong>: part of the high-pass added back to the image.</li>
+</ul>
+
+<h3>Unsharp masking</h3>
+<div class="formula">g = f − S(f) &nbsp;&nbsp;&nbsp;&nbsp; f<sub>UM</sub> = f + k · g</div>
+<ul>
+<li>S(f) is a blurred version of f, so g is the <strong>edge image</strong>: the original minus its blur.</li>
+<li>k controls sharpening strength; reasonable values are 0.2 to 0.7. With k &gt; 1 it's called a high-boost filter.</li>
+<li>It's multi-step: blur, subtract, scale, add.</li>
+<li>Limitations: <strong>noise sensitivity</strong> (it emphasizes high frequencies) and <strong>overshoot</strong> at sharp edges: the edge gets steeper by getting taller, so values go past 0 and 255 and must be clipped.</li>
+<li>History: Schreiber (1970), for newspaper wirephotos, based on photographic masking.</li>
+</ul>
+
+<h3>Smoothing filters</h3>
+<ul>
+<li><strong>Mean</strong> (box, sliding mean) filter: replace each pixel by the average of its neighbourhood. Reduces noise (effective against Gaussian noise) but blurs edges, because edges are sharp transitions too. Bigger kernels or repeated passes blur more. It's the opposite of sharpening.</li>
+<li><strong>Gaussian</strong> filter: nonuniform weights w(i, j) = e<sup>−(i² + j²)/(2σ²)</sup> for i, j from −⌊3σ⌋ to ⌊3σ⌋ (weights beyond 3σ are negligible). More weight in the centre; larger σ means a wider kernel and more blurring; rotationally symmetric (isotropic), so no directional bias. σ² = 1 gives a 7 × 7 kernel with centre 159/1000.</li>
+<li><strong>Median</strong> filter (a rank or order-statistic filter, non-linear): sort the neighbourhood and take the middle value. Removes <strong>impulse (salt-and-pepper) noise</strong> when noisy pixels are less than half the neighbourhood. It doesn't compress the brightness range, so it keeps edges sharp, including straight edges. But it's non-specific: any structure smaller than half the neighbourhood (a thin line, a small object) is removed too. Repeated passes cause posterization.</li>
+</ul>
+<p>Lecture example: the 25 values in a 5 × 5 neighbourhood sorted ascending; the 13th (middle) is 98, so the pixel becomes 98.</p>
+<div class="demo" data-demo="median"></div>
+
+<h3>Implementation habits</h3>
+<ul>
+<li>Store 2D images as 1D, contiguous arrays (or one Warp array), never as arrays of separate rows.</li>
+<li>Read from the input, write to a separate output; avoid unnecessary copies, especially between host and device.</li>
+</ul>
+</section>
+
+<!-- ================= 8 ================= -->
+<section id="compare">
+<h2>8. Pthreads vs MPI vs Warp</h2>
+<p class="source">Study guide synthesis of Lectures 3–18</p>
+<p class="lead">The same question asked three ways: where does the data live, who runs the code, and what does the library do for you.</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Pthreads</th><th>MPI</th><th>Warp</th></tr></thead>
+<tbody>
+<tr><td>Memory and communication</td><td>Shared address space; synchronize with mutexes, condition variables, atomics</td><td>Separate processes; message passing (point-to-point and collectives)</td><td>Separate host and device memory; data is copied to the device and kernels work on GPU memory</td></tr>
+<tr><td>Execution target</td><td>Threads on one shared-memory machine</td><td>Processes on one or more nodes (CPUs)</td><td>Heterogeneous: CPU host + Nvidia GPU, or CPU fallback (serial)</td></tr>
+<tr><td>Built-in facilities</td><td>Barriers (<code>pthread_barrier_wait</code>); reductions are DIY, no collectives</td><td>Rich collectives: Bcast, Reduce, Allreduce, Scatter, Gather, …</td><td>Kernel launches over N elements</td></tr>
+<tr><td>Best fit</td><td>Fine-grained updates to shared state, with careful synchronization</td><td>Large independent chunks; modest communication between steps</td><td>Large, data-parallel maps with uniform work and enough work per element to pay for the copies</td></tr>
+<tr><td>Common pitfalls</td><td>Data races, deadlocks, oversubscription (more threads than cores)</td><td>Mismatched tags/ranks, deadlocks, frequent small messages between machines</td><td>Excessive host–device copies, non-contiguous data, problems too small to pay for the copies</td></tr>
+<tr><td>Thread/process ID</td><td>Rank you pass in yourself</td><td><code>MPI_Comm_rank</code></td><td><code>wp.tid()</code></td></tr>
+<tr><td>Homogeneous?</td><td>Yes</td><td>Yes (compatible CPUs)</td><td>No: heterogeneous</td></tr>
+</tbody></table></div>
+</section>
+
+<!-- ================= Cheat sheet ================= -->
+<section id="cheat">
+<h2>Cheat sheet</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Topic</th><th>Remember</th></tr></thead>
+<tbody>
+<tr><td>Speedup / efficiency</td><td>S = T<sub>s</sub>/T<sub>p</sub>; E = S/p; linear S = p, E = 1</td></tr>
+<tr><td>Overhead</td><td>T<sub>p</sub> = T<sub>s</sub>/p + T<sub>overhead</sub>; per-core overhead = T<sub>p</sub> − T<sub>s</sub>/p</td></tr>
+<tr><td>Amdahl</td><td>S = 1/((1−a)/p + a) → 1/a. a = 0.1 → max 10; a = 0.05 → 20; a = 0.2 → 5</td></tr>
+<tr><td>Flynn</td><td>SISD serial; SIMD vector/SSE; MISD rare; MIMD multicore and clusters</td></tr>
+<tr><td>Vector processors</td><td>4–256 × 64-bit; easy, compilers vectorize, high bandwidth, all loaded data used; bad with irregular data, hard to scale</td></tr>
+<tr><td>MPI setup</td><td><code>MPI_Init</code>, <code>MPI_Comm_size</code>, <code>MPI_Comm_rank</code>, <code>MPI_Finalize</code>; <code>mpicc</code>, <code>mpiexec -n 4</code></td></tr>
+<tr><td>Matching</td><td>Communicator + source + tag must agree; wildcards only on receive: <code>MPI_ANY_SOURCE</code>, <code>MPI_ANY_TAG</code></td></tr>
+<tr><td>Status</td><td><code>status.MPI_SOURCE</code>, <code>status.MPI_TAG</code>, <code>MPI_Get_count(&amp;status, type, &amp;n)</code></td></tr>
+<tr><td>Order</td><td>Nonovertaking per sender; no order across senders; Recv always blocks; Send may buffer or block</td></tr>
+<tr><td>I/O</td><td>Only rank 0 reads stdin; stdout from many ranks is unordered</td></tr>
+<tr><td>Collectives</td><td>Everyone calls; no tags. Bcast → all; Reduce → dest only; Allreduce → all, no dest; Scatter splits; Gather assembles on dest</td></tr>
+<tr><td>Trapezoid</td><td>h = (b−a)/n; local_n = n/comm_sz; local_a = a + rank·local_n·h; one MPI_Reduce</td></tr>
+<tr><td>GPU</td><td>Stream + kernel; SIMT lockstep; divergence runs both paths; heterogeneous; copies are expensive</td></tr>
+<tr><td>Warp</td><td><code>@wp.kernel</code>, typed args, no return, <code>wp.tid()</code>, <code>wp.array</code>, <code>wp.zeros(_like)</code>, <code>wp.launch(k, dim, inputs, outputs, device)</code>, <code>.numpy()</code></td></tr>
+<tr><td>Devices</td><td><code>"cpu"</code> serial (Docker); <code>"cuda"</code> parallel on Nvidia</td></tr>
+<tr><td>Image I/O</td><td>PIL → <code>np.asarray(..., float32)</code> → <code>wp.array</code> → kernel → <code>.numpy()</code> → clip/rint/uint8 → <code>Image.fromarray</code></td></tr>
+<tr><td>Shapes</td><td>L (h, w); RGB (h, w, 3); RGBA (h, w, 4); <code>image.size</code> is (w, h)</td></tr>
+<tr><td>Alpha</td><td>Filter k &lt; 3, copy alpha through</td></tr>
+<tr><td>Convolution</td><td>Weighted sum of neighbourhood; smoothing kernel sums to 1; HPF sums to 0</td></tr>
+<tr><td>Borders</td><td>Copy (same size, raw frame), truncate image (smaller), truncate kernel (special kernels), reflect (most useful), circular (rare)</td></tr>
+<tr><td>Unsharp mask</td><td>g = f − blur(f); f<sub>UM</sub> = f + k·g; k 0.2–0.7; k &gt; 1 high-boost; noise + overshoot</td></tr>
+<tr><td>Gaussian / median</td><td>Gaussian: centre-weighted, σ ↑ more blur, isotropic. Median: kills impulse noise &lt; half window, keeps edges, removes thin lines</td></tr>
+</tbody></table></div>
+<h3>Pitfalls the exam can test</h3>
+<ul>
+<li>Choosing one message per element over a slow network, or an Allreduce inside the inner loop.</li>
+<li>Expecting <code>MPI_Recv</code> to return the count, or <code>status.MPI_TAG</code> to hold the sender.</li>
+<li>Calling a collective on only some ranks; expecting Reduce's result on every rank.</li>
+<li>Assuming messages from different senders arrive in rank order.</li>
+<li>Thinking <code>device="cpu"</code> runs in parallel.</li>
+<li>Returning a value from a Warp kernel, or leaving out type annotations.</li>
+<li>Forgetting to normalize a smoothing kernel; filtering the alpha channel; saving without clipping.</li>
+<li>Porting a tiny or low-work-per-byte problem to the GPU and expecting a speedup.</li>
+</ul>
+</section>
+
+      </article>
+    </div>
+  </main>
+  <script src="../assets/common.js"></script>
+  <script src="../assets/demos.js"></script>
+  <script src="../assets/demos2.js"></script>
+  <script>
+    (function () {
+      const links = Array.from(document.querySelectorAll('.toc a'));
+      const sections = links.map(a => document.querySelector(a.getAttribute('href')));
+      if (!('IntersectionObserver' in window)) return;
+      const obs = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+          }
+        });
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      sections.forEach(s => s && obs.observe(s));
+    })();
+  </script>
+</body>
+</html>

@@ -375,6 +375,7 @@
      ===================================================================== */
   function amdahl(root) {
     const ui = shell(root, 'Amdahl\'s law', 'Set how much of the program can be parallelized and see where speedup stops growing.');
+    const sym = S.EXAM === 'mt2' ? 'a' : 'r';  // Lecture 14 calls the serial fraction a
     let pct = 90, pSel = 6; // 2^6 = 64
     function render() {
       const r = 1 - pct / 100, cap = 1 / r, W = 680, H = 300, L = 54, R = 120, Tp = 20, B = 40;
@@ -394,14 +395,14 @@
       b += txt(xAt(lastPerf) + 6, yAt(Math.pow(2, lastPerf)) - 6, 'perfect (S = p)', 'font-size="12" fill="var(--ink-2)"');
       // cap
       b += '<line x1="' + L + '" x2="' + (L + pw) + '" y1="' + yAt(cap) + '" y2="' + yAt(cap) + '" stroke="var(--bad)" stroke-dasharray="3 4"/>' +
-        txt(L + pw + 8, yAt(cap) + 4, 'limit 1/r = ' + fmt(cap), 'font-size="12" fill="var(--bad)" font-weight="700"');
+        txt(L + pw + 8, yAt(cap) + 4, 'limit 1/' + sym + ' = ' + fmt(cap), 'font-size="12" fill="var(--bad)" font-weight="700"');
       // amdahl curve
       b += '<path d="' + xs.map((i, k) => (k ? 'L' : 'M') + xAt(i) + ' ' + yAt(S2(Math.pow(2, i)))).join(' ') + '" fill="none" stroke="var(--accent)" stroke-width="2.5"/>';
       const sp = S2(Math.pow(2, pSel));
       b += '<circle cx="' + xAt(pSel) + '" cy="' + yAt(sp) + '" r="5" fill="var(--accent)"/>' + txt(xAt(pSel), yAt(sp) - 10, fmt(sp) + '×', 'text-anchor="middle" font-weight="700" fill="var(--ink)"');
       ui.stage.innerHTML = svg(W, H, b, 'Amdahl speedup curve');
-      ui.readout.textContent = pct + '% parallel, so r = ' + fmt(r) + '. On ' + Math.pow(2, pSel) + ' cores S = 1 / (' + fmt(r) + ' + ' + fmt(1 - r) + '/' + Math.pow(2, pSel) +
-        ') = ' + fmt(sp) + '. No number of cores can beat 1/r = ' + fmt(cap) + '.';
+      ui.readout.textContent = pct + '% parallel, so ' + sym + ' = ' + fmt(r) + '. On ' + Math.pow(2, pSel) + ' cores S = 1 / (' + fmt(1 - r) + '/' + Math.pow(2, pSel) + ' + ' + fmt(r) +
+        ') = ' + fmt(sp) + '. No number of cores can beat 1/' + sym + ' = ' + fmt(cap) + '.';
     }
     function fmt(v) { return String(Math.round(v * 100) / 100); }
     slider(ui.controls, 'Parallel fraction', 50, 99, pct, v => { pct = v; render(); }, v => v + '%');
@@ -574,7 +575,9 @@
     resetState(); render();
   }
 
-  const DEMOS = { concurrency, split, reduction, join, oddeven, race, amdahl, cache, pipeline, heat };
+  /* Registry: later scripts (assets/demos2.js) add their demos to window.StudyDemos before DOMContentLoaded. */
+  const DEMOS = window.StudyDemos = Object.assign(window.StudyDemos || {}, { concurrency, split, reduction, join, oddeven, race, amdahl, cache, pipeline, heat });
+  window.DemoKit = { shell, btn, modes, transport, slider, svg, txt, tc };
   document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.demo[data-demo]').forEach(el => {
       const f = DEMOS[el.getAttribute('data-demo')];

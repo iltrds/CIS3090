@@ -2,36 +2,84 @@
 (function () {
   'use strict';
 
-  const EXAM_DATE = new Date('2026-10-20T00:00:00-04:00');
+  /* Which midterm this page belongs to: <html data-exam="mt2"> for Midterm 2 pages, default Midterm 1. */
+  const EXAM = document.documentElement.getAttribute('data-exam') === 'mt2' ? 'mt2' : 'mt1';
 
-  const TOPICS = {
-    why: 'Why parallel computing',
-    design: 'Designing parallel programs',
-    pthreads: 'Pthreads basics and POSIX',
-    oddeven: 'Barriers and odd-even sort',
-    sync: 'Thread synchronization',
-    perf: 'Performance analysis',
-    hw: 'Hardware and caches',
-    heat: 'Heat diffusion case study',
-    review: 'Recommended exercises (Moodle)'
+  const CONFIG = {
+    mt1: {
+      date: '2026-10-20T00:00:00-04:00',
+      title: 'CIS*3090 Midterm 1',
+      topics: {
+        why: 'Why parallel computing',
+        design: 'Designing parallel programs',
+        pthreads: 'Pthreads basics and POSIX',
+        oddeven: 'Barriers and odd-even sort',
+        sync: 'Thread synchronization',
+        perf: 'Performance analysis',
+        hw: 'Hardware and caches',
+        heat: 'Heat diffusion case study',
+        review: 'Recommended exercises (Moodle)'
+      },
+      pages: [
+        ['index.html', 'Home', 'home'],
+        ['read.html', 'Read', 'read'],
+        ['review.html', 'Review', 'review'],
+        ['flashcards.html', 'Flashcards', 'flashcards'],
+        ['quiz.html', 'Quizzes', 'quiz'],
+        ['exam.html', 'Practice exam', 'exam']
+      ]
+    },
+    mt2: {
+      date: '2026-11-26T00:00:00-05:00',
+      title: 'CIS*3090 Midterm 2',
+      topics: {
+        perf: 'Performance and Amdahl\'s law',
+        arch: 'Parallel architectures and data layout',
+        mpi: 'MPI basics and point-to-point',
+        coll: 'MPI collectives and the trapezoidal rule',
+        gpu: 'GPGPU concepts',
+        warp: 'Programming with Warp',
+        img: 'Image processing',
+        compare: 'Pthreads vs MPI vs Warp',
+        guide: 'Study guide practice set'
+      },
+      pages: [
+        ['index.html', 'Home', 'home'],
+        ['read.html', 'Read', 'read'],
+        ['flashcards.html', 'Flashcards', 'flashcards'],
+        ['quiz.html', 'Quizzes', 'quiz'],
+        ['exam.html', 'Practice exam', 'exam']
+      ]
+    }
   };
+  const C = CONFIG[EXAM];
+  const EXAM_DATE = new Date(C.date);
+  const TOPICS = C.topics;
   const TOPIC_ORDER = Object.keys(TOPICS);
 
   /* ---------- Storage (per-browser conveniences only; never required) ---------- */
-  const NS = 'cis3090-mt1:';
-  const store = {
-    get(key, fallback) {
-      try {
-        const raw = window.localStorage.getItem(NS + key);
-        return raw === null ? fallback : JSON.parse(raw);
-      } catch (e) { return fallback; }
-    },
-    set(key, value) {
-      try { window.localStorage.setItem(NS + key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ }
-    },
-    remove(key) {
-      try { window.localStorage.removeItem(NS + key); } catch (e) { /* ignore */ }
-    }
+  const NS = 'cis3090-' + EXAM + ':';
+  function makeStore(ns) {
+    return {
+      get(key, fallback) {
+        try {
+          const raw = window.localStorage.getItem(ns + key);
+          return raw === null ? fallback : JSON.parse(raw);
+        } catch (e) { return fallback; }
+      },
+      set(key, value) {
+        try { window.localStorage.setItem(ns + key, JSON.stringify(value)); } catch (e) { /* storage unavailable */ }
+      },
+      remove(key) {
+        try { window.localStorage.removeItem(ns + key); } catch (e) { /* ignore */ }
+      }
+    };
+  }
+  const store = makeStore(NS);
+  /* The theme is shared by both midterms; older visits saved it under the Midterm 1 prefix. */
+  const themeStore = {
+    get() { const shared = makeStore('cis3090:').get('theme', null); return shared !== null ? shared : makeStore('cis3090-mt1:').get('theme', null); },
+    set(v) { makeStore('cis3090:').set('theme', v); }
   };
 
   /* ---------- Text ---------- */
@@ -162,8 +210,21 @@
   }
 
   /* Question stem: text, optional code block, optional chart. */
+  function isMulti(q) { return Array.isArray(q.answer); }
+  /* Scoring used on the midterm: select-all questions give partial credit for a subset of the
+     correct options, but any incorrect selection scores 0. Single-answer questions are 0 or 1. */
+  function credit(q, chosen) {
+    if (!isMulti(q)) return chosen === q.answer ? 1 : 0;
+    const picked = Array.isArray(chosen) ? chosen : [];
+    if (!picked.length) return 0;
+    if (picked.some(i => q.answer.indexOf(i) < 0)) return 0;
+    return picked.length / q.answer.length;
+  }
+  function fmtCredit(c) { return c === 1 ? '1' : c === 0 ? '0' : String(Math.round(c * 100) / 100); }
+
   function stemHTML(q) {
-    let h = q.ctx ? '<div class="q-context">' + md(q.ctx) + '</div>' : '';
+    let h = isMulti(q) ? '<div class="saa-badge">Select all that apply</div>' : '';
+    h += q.ctx ? '<div class="q-context">' + md(q.ctx) + '</div>' : '';
     h += '<div class="q-text">' + md(q.q) + '</div>';
     if (q.code) h += '<pre><code>' + esc(q.code) + '</code></pre>';
     if (q.chart) h += renderChart(q.chart);
@@ -173,20 +234,13 @@
   const KIND_LABEL = { concept: 'Concept', calc: 'Calculation', code: 'Code reading', graph: 'Graph reading' };
 
   /* ---------- Header, nav and theme ---------- */
-  const PAGES = [
-    ['index.html', 'Home', 'home'],
-    ['read.html', 'Read', 'read'],
-    ['review.html', 'Review', 'review'],
-    ['flashcards.html', 'Flashcards', 'flashcards'],
-    ['quiz.html', 'Quizzes', 'quiz'],
-    ['exam.html', 'Practice exam', 'exam']
-  ];
+  const PAGES = C.pages;
 
   function applyTheme(t) {
     if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
     else document.documentElement.removeAttribute('data-theme');
   }
-  applyTheme(store.get('theme', null));
+  applyTheme(themeStore.get());
 
   function currentTheme() {
     const set = document.documentElement.getAttribute('data-theme');
@@ -200,16 +254,22 @@
     const page = document.body.getAttribute('data-page');
     const links = PAGES.map(p => '<a href="' + p[0] + '"' + (p[2] === page ? ' aria-current="page"' : '') + '>' + p[1] + '</a>').join('');
     host.className = 'site-header';
+    const m1 = EXAM === 'mt1' ? 'index.html' : '../index.html';
+    const m2 = EXAM === 'mt1' ? 'm2/index.html' : 'index.html';
+    const sw = '<nav class="exam-switch" aria-label="Midterm">' +
+      '<a href="' + m1 + '"' + (EXAM === 'mt1' ? ' aria-current="true"' : '') + '>Midterm 1</a>' +
+      '<a href="' + m2 + '"' + (EXAM === 'mt2' ? ' aria-current="true"' : '') + '>Midterm 2</a></nav>';
     host.innerHTML = '<div class="inner">' +
-      '<a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>CIS*3090 Midterm 1</a>' +
+      '<a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>CIS*3090</a>' +
+      sw +
       '<nav class="site-nav" aria-label="Main">' + links + '</nav>' +
       '<button class="theme-toggle" type="button"></button></div>';
     const btn = host.querySelector('.theme-toggle');
-    const label = () => { btn.textContent = currentTheme() === 'dark' ? 'Light mode' : 'Dark mode'; };
+    const label = () => { const t = currentTheme() === 'dark' ? 'Light' : 'Dark'; btn.innerHTML = t + '<span class="tt-long"> mode</span>'; btn.setAttribute('aria-label', 'Switch to ' + t.toLowerCase() + ' mode'); };
     label();
     btn.addEventListener('click', () => {
       const next = currentTheme() === 'dark' ? 'light' : 'dark';
-      applyTheme(next); store.set('theme', next); label();
+      applyTheme(next); themeStore.set(next); label();
     });
   }
 
@@ -220,5 +280,5 @@
 
   document.addEventListener('DOMContentLoaded', buildHeader);
 
-  window.Study = { TOPICS, TOPIC_ORDER, store, esc, md, shuffle, optionOrder, renderChart, stemHTML, KIND_LABEL, daysUntilExam, EXAM_DATE };
+  window.Study = { EXAM, TOPICS, TOPIC_ORDER, store, esc, md, shuffle, optionOrder, renderChart, stemHTML, KIND_LABEL, daysUntilExam, EXAM_DATE, isMulti, credit, fmtCredit };
 })();
