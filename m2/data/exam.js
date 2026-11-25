@@ -30,10 +30,10 @@
       options: ['SISD', 'SIMD', 'MISD', 'MIMD'], answer: 1,
       why: 'One instruction applied to multiple data elements: SIMD, the same idea as a vector processor.' },
     { id: 'e7', topic: 'arch', kind: 'concept', q: 'Which are drawbacks of vector processors?',
-      options: ['They work poorly with irregular data structures', 'They are hard to scale, since longer vectors aren\'t very useful', 'Compilers can\'t vectorize any code automatically', 'They have low memory bandwidth'], answer: [0, 1],
+      options: ['They work poorly with irregular data structures', 'They\'re hard to scale; longer vectors don\'t help much', 'Compilers can\'t vectorize any code automatically', 'They have low memory bandwidth compared with caches'], answer: [0, 1],
       why: 'Lecture 14\'s two disadvantages. Compilers are good at vectorizing, and high memory bandwidth is a benefit.' },
     { id: 'e8', topic: 'arch', kind: 'concept', q: 'An image is stored as an array of pointers, one separately allocated row per pointer. Why is that a problem for a GPU program?',
-      options: ['GPUs can\'t store floating-point data', 'The rows aren\'t contiguous, so the image can\'t be copied to the device as one block', 'Pointer arrays are slower to allocate', 'The GPU reads rows in reverse order'], answer: 1,
+      options: ['GPUs can\'t store floating-point data in device memory', 'The rows aren\'t contiguous, so they can\'t be copied as one block', 'Pointer arrays take longer to allocate than flat arrays', 'The GPU always reads separately allocated rows in reverse order'], answer: 1,
       why: 'One flat, contiguous buffer moves in a single transfer and gives neighbouring threads neighbouring addresses. Separate rows need one copy each or a packing step.' },
     { id: 'e9', topic: 'mpi', kind: 'code', q: 'What happens when this runs?',
       ctx: 'my_comm is a communicator that contains ranks 0 and 1 of MPI_COMM_WORLD.',
@@ -41,7 +41,7 @@
     MPI_Send(&x, 1, MPI_INT, 0, 5, my_comm);
 else if (my_rank == 0)
     MPI_Recv(&x, 1, MPI_INT, 1, 5, MPI_COMM_WORLD, MPI_STATUS_IGNORE);`,
-      options: ['Rank 0 receives x, because source and tag match', 'Rank 0\'s receive never matches, because the communicators differ', 'MPI uses whichever communicator is larger', 'It works only if both ranks use MPI_ANY_TAG'], answer: 1,
+      options: ['Rank 0 receives x, because the source and tag both match', 'Rank 0 never receives it, because the communicators differ', 'MPI delivers it on whichever communicator is larger', 'It works only if both ranks switch to MPI_ANY_TAG'], answer: 1,
       why: 'Communicator, source and tag must all agree. A message sent on my_comm can\'t be received on MPI_COMM_WORLD, so rank 0 hangs.' },
     { id: 'e10', topic: 'mpi', kind: 'code', q: 'Workers finish in an unpredictable order. Why does the manager use `MPI_ANY_SOURCE` here instead of receiving from rank 1, then 2, and so on?',
       code: `for (int i = 1; i < comm_sz; i++) {
@@ -49,7 +49,7 @@ else if (my_rank == 0)
              MPI_COMM_WORLD, &status);
     Process_result(result, status.MPI_SOURCE);
 }`,
-      options: ['It handles each result as soon as any worker finishes, instead of waiting on a slow rank 1', 'MPI_ANY_SOURCE receives every worker\'s result in one call', 'It guarantees results arrive in rank order', 'Workers can\'t name rank 0 as a destination otherwise'], answer: 0,
+      options: ['Each result is handled as soon as its worker finishes', 'MPI_ANY_SOURCE collects every worker\'s result in a single call', 'MPI_ANY_SOURCE guarantees the results arrive in rank order', 'Workers can\'t name rank 0 as their destination otherwise'], answer: 0,
       why: 'With a fixed source, a fast worker\'s result waits until every lower rank has reported. MPI_ANY_SOURCE takes them in completion order; status.MPI_SOURCE says who sent each.' },
     { id: 'e11', topic: 'mpi', kind: 'concept', q: 'Which statements about `MPI_Recv` are true?',
       options: ['It blocks until a matching message arrives', 'Its count argument is the capacity of the receive buffer', 'It can use MPI_ANY_TAG to accept any tag', 'Its return value is the number of elements received', 'It accepts a message from another communicator if the tag matches'], answer: [0, 1, 2],
@@ -66,7 +66,7 @@ else if (my_rank == 0)
       options: ['3', '5', '12', '15'], answer: 2,
       why: '3 values to each of the 4 other ranks: 12 sends. Three MPI_Bcast calls would replace them.' },
     { id: 'e13', topic: 'mpi', kind: 'concept', q: 'In that same function, a, b and n are all sent with tag 0, yet each receiving rank always gets them into the right variables. Why?',
-      options: ['MPI sorts messages by data type', 'Messages from one sender to one receiver are nonovertaking, so they arrive in the order sent', 'MPI_DOUBLE messages are always delivered before MPI_INT ones', 'It isn\'t safe; the values may be swapped'], answer: 1,
+      options: ['MPI sorts incoming messages by their data type', 'Messages from one sender to one receiver can\'t overtake each other', 'MPI_DOUBLE messages are always delivered before MPI_INT ones', 'It isn\'t safe; the values can arrive swapped on a busy network'], answer: 1,
       why: 'Nonovertaking: the receiver\'s three receives from rank 0 match the three sends in order.' },
     { id: 'e14', topic: 'compare', kind: 'concept', q: 'In which approaches must the programmer explicitly move data between separate memories before computing on it?',
       options: ['MPI', 'Warp', 'Pthreads'], answer: [0, 1],
@@ -94,10 +94,10 @@ def f(x: wp.array(dtype=float), out: wp.array(dtype=float)):
         out[i] = expensive(x[i])
     else:
         out[i] = 0.0`,
-      options: ['Threads in a lockstep group that take different branches run both paths, so the group always pays for `expensive`', 'Kernels can\'t contain if statements', 'Each thread must wait for the previous thread\'s output', 'The CPU executes the else branch'], answer: 0,
+      options: ['Lockstep threads that diverge run both branches, paying for `expensive`', 'Each thread must wait for the previous thread\'s output first', 'Warp kernels can\'t contain if statements, so it falls back to the CPU', 'The CPU executes the else branch while the GPU does the rest'], answer: 0,
       why: 'Branch divergence: lanes are masked off rather than skipped. Uniform work per thread avoids it.' },
     { id: 'e20', topic: 'gpu', kind: 'concept', q: 'A Warp kernel launched with `device="cuda"` reads its input array from ___.',
-      options: ['the CPU\'s main memory, directly', 'GPU device memory, after the array was copied there', 'a file on disk', 'another kernel\'s return value'], answer: 1,
+      options: ['the CPU\'s main memory, read directly across the bus', 'GPU device memory, after the array was copied there', 'a file on disk that Warp writes when the array is made', 'the return value of the previous kernel launch'], answer: 1,
       why: 'Host and device have separate memories. wp.array(..., device="cuda") copies the data to the GPU, and kernels work on device memory.' },
     { id: 'e21', topic: 'warp', kind: 'code', q: 'Which launch correctly passes the box-filter radius as 2?',
       code: `@wp.kernel
@@ -111,11 +111,11 @@ def box(src: wp.array3d(dtype=wp.float32),
     { id: 'e22', topic: 'warp', kind: 'code', q: 'This 3D filter kernel is launched over an RGBA image of shape (h, w, 4). Which body is correct?',
       code: `i, j, k = wp.tid()
 # option body goes here`,
-      options: ['Filter every channel, including k = 3', 'If k < 3, filter; otherwise copy the input value through unchanged', 'If k < 3, filter; otherwise do nothing', 'If k == 3, filter; otherwise copy'], answer: 1,
+      options: ['Filter every channel the same way, including k = 3', 'If k < 3, filter; otherwise copy the input value through', 'If k < 3, filter; otherwise leave the output value alone', 'If k == 3, filter; otherwise copy the input value through'], answer: 1,
       why: 'Alpha (k = 3) must be copied. Doing nothing leaves it 0 in a wp.zeros_like output, which saves a fully transparent image.' },
     { id: 'e23', topic: 'warp', kind: 'code', q: '`npOut` holds a sharpened image as float32 values, some below 0 and some above 255. Which line builds the output image correctly?',
-      options: ['`Image.fromarray(np.uint8(npOut))`', '`Image.fromarray(np.uint8(np.clip(np.rint(npOut), 0, 255)))`', '`Image.fromarray(npOut)`', '`Image.fromarray(np.clip(npOut, 0, 1))`'], answer: 1,
-      why: 'Round, clip to 0–255, then convert to uint8. Without clipping, uint8 wraps out-of-range values and creates salt-and-pepper along edges.' },
+      options: ['`Image.fromarray(np.uint8(np.rint(npOut)))`', '`Image.fromarray(np.uint8(np.clip(np.rint(npOut), 0, 255)))`', '`Image.fromarray(np.uint8(npOut / np.max(npOut) * 255))`', '`Image.fromarray(np.clip(npOut, 0, 255).astype(np.float32))`'], answer: 1,
+      why: 'Round, clip to 0–255, then convert to uint8. Without clipping, uint8 wraps out-of-range values (salt-and-pepper along edges). Dividing by the max doesn\'t fix negative values and changes the brightness, and a float32 array gives a 32-bit float image, not an 8-bit one.' },
     { id: 'e24', topic: 'warp', kind: 'concept', q: 'Which statements about Warp kernels are true?',
       options: ['Every argument needs a type annotation', 'Results are written into array arguments', '`wp.tid()` gives each thread its index in the launch grid', 'A kernel can return a value to the host', 'With `device="cpu"` the kernel runs in parallel on all CPU cores'], answer: [0, 1, 2],
       why: 'Kernels are statically typed and don\'t return values. On the CPU, Warp currently runs kernels serially.' },
@@ -127,7 +127,7 @@ def box(src: wp.array3d(dtype=wp.float32),
       options: ['100 × 80', '94 × 74', '93 × 73', '98 × 78'], answer: 1,
       why: 'Half-size 3 on each side: (100 − 6) × (80 − 6) = 94 × 74.' },
     { id: 'e27', topic: 'img', kind: 'concept', q: 'Compared with a mean filter of the same size, a Gaussian filter ___.',
-      options: ['gives more weight to the central pixels, so it blurs more gently', 'removes impulse noise completely', 'sharpens edges', 'only works on colour images'], answer: 0,
+      options: ['gives more weight to central pixels than to outer ones', 'removes impulse noise completely, like a median filter', 'sharpens edges while smoothing the flat regions', 'only works on colour images, one channel at a time'], answer: 0,
       why: 'Gaussian weights fall off with distance from the centre (nonuniform), while a mean filter weighs every neighbour equally. Removing impulses is the median filter\'s job.' }
   ];
 })();
